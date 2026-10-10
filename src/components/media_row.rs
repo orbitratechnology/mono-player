@@ -7,10 +7,11 @@ use gpui_kit::component::{Disableable as _, Icon, h_flex};
 use gpui_kit::{
     App, ClickEvent, ElementId, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::FluentBuilder as _,
+    TestSupportExt as _, Window, div, prelude::FluentBuilder as _,
 };
 
 use super::icon_button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use crate::theme::metrics::{EDGE, ROW_HEIGHT};
 use crate::theme::tokens;
 
@@ -52,13 +53,62 @@ impl RenderOnce for MediaRow {
                 .into_any_element()
         };
 
+        let label = if self.failed {
+            format!("{}, failed to play", self.title)
+        } else if self.is_current {
+            format!("{}, current item", self.title)
+        } else {
+            format!("Play {}", self.title)
+        };
+        // The main area is a real button: focusable, keyboard-activatable, and named.
+        let play = Button::new(ElementId::NamedInteger("media-row-play".into(), self.id))
+            .ghost()
+            .flex_1()
+            .min_w_0()
+            .h(ROW_HEIGHT)
+            .px_0()
+            .justify_start()
+            .accessibility_label(label)
+            .on_click(move |event, window, cx| activate(event, window, cx))
+            .child(
+                h_flex()
+                    .w_full()
+                    .min_w_0()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        h_flex()
+                            .w_6()
+                            .flex_shrink_0()
+                            .justify_center()
+                            .child(marker),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_sm()
+                            .when(self.is_current, |d| d.font_weight(FontWeight::BOLD))
+                            .text_color(if self.failed {
+                                t.foreground_disabled
+                            } else {
+                                t.foreground
+                            })
+                            .when(self.failed, |d| d.line_through())
+                            .child(self.title),
+                    ),
+            );
+
         h_flex()
             .id(row_id)
             .h(ROW_HEIGHT)
             .w_full()
             .pl(EDGE)
             .pr_1()
-            .gap_2()
+            .gap_1()
             .items_center()
             .border_l_2()
             .border_color(if self.is_current {
@@ -68,32 +118,7 @@ impl RenderOnce for MediaRow {
             })
             .when(self.is_current, |row| row.bg(t.surface_active))
             .hover(|row| row.bg(t.surface_hover))
-            .cursor_pointer()
-            .on_click(move |event, window, cx| activate(event, window, cx))
-            .child(
-                h_flex()
-                    .w_6()
-                    .flex_shrink_0()
-                    .justify_center()
-                    .child(marker),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .text_sm()
-                    .when(self.is_current, |d| d.font_weight(FontWeight::BOLD))
-                    .text_color(if self.failed {
-                        t.foreground_disabled
-                    } else {
-                        t.foreground
-                    })
-                    .when(self.failed, |d| d.line_through())
-                    .child(self.title),
-            )
+            .child(play)
             .child(
                 icon_button(
                     ElementId::NamedInteger("row-up".into(), self.id),
@@ -120,5 +145,6 @@ impl RenderOnce for MediaRow {
                 )
                 .on_click(move |e, w, cx| remove(e, w, cx)),
             )
+            .test_support()
     }
 }

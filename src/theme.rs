@@ -120,7 +120,7 @@ pub fn install(cx: &mut App) {
     let t = *tokens();
     Theme::update(cx, |theme| {
         // 1. Neutralize every color the component library defines.
-        if let Ok(serde_json::Value::Object(mut map)) = serde_json::to_value(&theme.colors) {
+        if let Ok(serde_json::Value::Object(mut map)) = serde_json::to_value(theme.colors) {
             for value in map.values_mut() {
                 if let Ok(color) = serde_json::from_value::<Hsla>(value.clone())
                     && let Ok(gray) = serde_json::to_value(desaturate(color))

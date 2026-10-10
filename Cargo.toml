@@ -2,9 +2,8 @@
 name = "mono-player"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.90"
 description = "A fast, monochrome desktop media player built on GPUI Kit and LibVLC."
-license = "MIT OR Apache-2.0"
+publish = false
 readme = "README.md"
 default-run = "mono-player"
 

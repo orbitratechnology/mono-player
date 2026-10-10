@@ -59,7 +59,9 @@ impl Surface {
 
     pub fn set_frame(&mut self, frame: Frame) {
         // AppKit works in points (logical pixels); flip unless the parent is flipped.
-        let y = match self.view.superview() {
+        // SAFETY: reading the superview of our own live view on the main thread.
+        let parent = unsafe { self.view.superview() };
+        let y = match parent {
             Some(parent) if !parent.isFlipped() => {
                 parent.frame().size.height - f64::from(frame.y) - f64::from(frame.height)
             }

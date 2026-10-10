@@ -104,6 +104,27 @@ pub const VOLUME_STEP: u8 = 5;
 /// Progress events are capped to this cadence (8 updates/s, inside the PRD's 4–10 window).
 pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(125);
 
+/// Audio/subtitle synchronization step and range.
+pub const DELAY_STEP_MS: i64 = 100;
+pub const MAX_DELAY_MS: i64 = 30_000;
+
+/// Clamp a delay to `±MAX_DELAY_MS`.
+pub fn clamp_delay(ms: i64) -> i64 {
+    ms.clamp(-MAX_DELAY_MS, MAX_DELAY_MS)
+}
+
+/// Display a delay as `0.0 s`, `+0.3 s` or `−1.2 s`.
+pub fn format_delay(ms: i64) -> String {
+    let seconds = ms as f64 / 1000.0;
+    if ms == 0 {
+        "0.0 s".into()
+    } else if ms > 0 {
+        format!("+{seconds:.1} s")
+    } else {
+        format!("−{:.1} s", -seconds)
+    }
+}
+
 /// Clamp a volume request into `0..=MAX_VOLUME`.
 pub fn clamp_volume(volume: i32) -> u8 {
     volume.clamp(0, MAX_VOLUME as i32) as u8
@@ -240,6 +261,15 @@ mod tests {
         assert_eq!(format_rate(1.0), "1×");
         assert_eq!(format_rate(1.25), "1.25×");
         assert_eq!(format_rate(0.5), "0.5×");
+    }
+
+    #[test]
+    fn delays() {
+        assert_eq!(clamp_delay(45_000), MAX_DELAY_MS);
+        assert_eq!(clamp_delay(-45_000), -MAX_DELAY_MS);
+        assert_eq!(format_delay(0), "0.0 s");
+        assert_eq!(format_delay(300), "+0.3 s");
+        assert_eq!(format_delay(-1_200), "−1.2 s");
     }
 
     #[test]

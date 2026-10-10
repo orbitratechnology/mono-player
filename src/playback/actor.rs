@@ -17,7 +17,8 @@ use futures::channel::oneshot;
 use super::error::PlaybackError;
 use super::protocol::{Command, Event, MediaSource, RequestId};
 use super::state::{
-    MAX_VOLUME, PROGRESS_INTERVAL, PlaybackState, Throttle, clamp_seek, clamp_volume, nearest_rate,
+    MAX_VOLUME, PROGRESS_INTERVAL, PlaybackState, Throttle, clamp_delay, clamp_seek, clamp_volume,
+    nearest_rate,
 };
 use super::vlc_adapter::{EngineEvent, Player, Runtime};
 use crate::diagnostics as log;
@@ -131,6 +132,8 @@ struct Actor {
     seekable: bool,
     progress: Throttle,
     tracks_dirty: bool,
+    audio_delay_ms: i64,
+    subtitle_delay_ms: i64,
 }
 
 impl Actor {
@@ -152,6 +155,8 @@ impl Actor {
             seekable: false,
             progress: Throttle::new(PROGRESS_INTERVAL),
             tracks_dirty: false,
+            audio_delay_ms: 0,
+            subtitle_delay_ms: 0,
         }
     }
 
@@ -357,6 +362,8 @@ impl Actor {
                 self.flush_tracks();
             }
             Command::LoadExternalSubtitle(path) => self.load_subtitle(path),
+            Command::SetAudioDelay(ms) => self.set_delays(Some(clamp_delay(ms)), None),
+            Command::SetSubtitleDelay(ms) => self.set_delays(None, Some(clamp_delay(ms))),
             Command::SetVideoTarget(target) => {
                 self.video_target = target;
                 if let Some(player) = &self.player {
@@ -384,6 +391,9 @@ impl Actor {
         self.seekable = false;
         self.progress.reset();
         self.tracks_dirty = false;
+        // LibVLC resets synchronization per input.
+        self.audio_delay_ms = 0;
+        self.subtitle_delay_ms = 0;
         self.emit(Event::MediaOpening { request });
         self.set_state(PlaybackState::Opening);
 
@@ -473,6 +483,30 @@ impl Actor {
         self.emit_progress(true);
     }
 
+    fn set_delays(&mut self, audio_ms: Option<i64>, subtitle_ms: Option<i64>) {
+        let (Some(player), Some(request)) = (&self.player, self.current_request()) else {
+            return;
+        };
+        if !self.state.has_media() {
+            return;
+        }
+        if let Some(ms) = audio_ms
+            && player.set_audio_delay(ms)
+        {
+            self.audio_delay_ms = ms;
+        }
+        if let Some(ms) = subtitle_ms
+            && player.set_subtitle_delay(ms)
+        {
+            self.subtitle_delay_ms = ms;
+        }
+        self.emit(Event::DelaysChanged {
+            request,
+            audio_ms: self.audio_delay_ms,
+            subtitle_ms: self.subtitle_delay_ms,
+        });
+    }
+
     fn load_subtitle(&mut self, path: PathBuf) {
         let error = PlaybackError::SubtitleLoadFailed(path.clone());
         let Some(player) = self.player.as_ref().filter(|_| self.state.has_media()) else {
@@ -517,6 +551,11 @@ impl Actor {
                 }
             }
             EngineEvent::EndReached => {
+                if self.ended_without_media() {
+                    // LibVLC's demuxer fallback can "play" unrecognizable data and end at once
+                    // without reporting an error; surface it as the failure it is.
+                    return self.fail_current(request);
+                }
                 if let Some(length) = self.length_ms {
                     self.time_ms = length;
                 }
@@ -524,14 +563,7 @@ impl Actor {
                 self.set_state(PlaybackState::Ended);
                 self.emit(Event::EndReached { request });
             }
-            EngineEvent::EncounteredError => {
-                let current = self.current.as_ref().expect("checked above");
-                let error = PlaybackError::PlaybackFailed {
-                    name: current.source.display_name(),
-                    is_stream: current.source.is_stream(),
-                };
-                self.fail(Some(request), error);
-            }
+            EngineEvent::EncounteredError => self.fail_current(request),
             EngineEvent::TimeChanged(time) => {
                 self.time_ms = time.max(0);
                 self.emit_progress(false);
@@ -558,6 +590,27 @@ impl Actor {
             }),
             EngineEvent::TracksChanged => self.tracks_dirty = true,
         }
+    }
+
+    fn fail_current(&mut self, request: RequestId) {
+        let current = self.current.as_ref().expect("caller checked the request");
+        let error = PlaybackError::PlaybackFailed {
+            name: current.source.display_name(),
+            is_stream: current.source.is_stream(),
+        };
+        self.fail(Some(request), error);
+    }
+
+    /// Whether the item reached its end without ever exposing a decodable stream: no length, no
+    /// position, no video output and no audio track.
+    fn ended_without_media(&self) -> bool {
+        let Some(player) = &self.player else {
+            return false;
+        };
+        self.length_ms.is_none()
+            && self.time_ms <= 0
+            && !player.has_video()
+            && player.tracks().real_audio().next().is_none()
     }
 
     /// First `Playing` of an item: its audio output now exists, so volume/mute/rate stick.

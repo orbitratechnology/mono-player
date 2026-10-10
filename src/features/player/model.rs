@@ -41,6 +41,8 @@ pub struct PlayerModel {
     pub muted: bool,
     pub rate: f32,
     pub tracks: Tracks,
+    pub audio_delay_ms: i64,
+    pub subtitle_delay_ms: i64,
     /// The most recent error to show (dismissable).
     pub error: Option<PlaybackError>,
     pub runtime: RuntimeStatus,
@@ -61,6 +63,8 @@ impl Default for PlayerModel {
             muted: false,
             rate: 1.0,
             tracks: Tracks::default(),
+            audio_delay_ms: 0,
+            subtitle_delay_ms: 0,
             error: None,
             runtime: RuntimeStatus::NotStarted,
         }
@@ -79,6 +83,8 @@ impl PlayerModel {
         self.has_video = false;
         self.buffering = None;
         self.tracks = Tracks::default();
+        self.audio_delay_ms = 0;
+        self.subtitle_delay_ms = 0;
         self.error = None;
     }
 
@@ -175,6 +181,15 @@ impl PlayerModel {
             }
             Event::RateChanged { rate } => {
                 self.rate = rate;
+                Outcome::Changed
+            }
+            Event::DelaysChanged {
+                request,
+                audio_ms,
+                subtitle_ms,
+            } if self.is_current(request) => {
+                self.audio_delay_ms = audio_ms;
+                self.subtitle_delay_ms = subtitle_ms;
                 Outcome::Changed
             }
             Event::EndReached { request } if self.is_current(request) => {

@@ -19,7 +19,8 @@ use gpui_kit::{
     App, AppContext as _, Bounds, Context, Entity, ExternalPaths, FocusHandle, Focusable,
     FontWeight, InteractiveElement as _, IntoElement, MouseMoveEvent, ParentElement as _,
     PathPromptOptions, Pixels, Render, SharedString, Size, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Task, Window, canvas, div, prelude::FluentBuilder as _, px, size,
+    Styled as _, Subscription, Task, TestSupportExt as _, Window, canvas, div,
+    prelude::FluentBuilder as _, px, size,
 };
 
 use super::commands::{RESTART_THRESHOLD_MS, classify_paths, seek_offset_ms};
@@ -34,7 +35,8 @@ use crate::diagnostics as log;
 use crate::features::playlist::model::{Advance, Playlist, QueueItemId};
 use crate::persistence::settings::{self, Settings, WindowGeometry};
 use crate::playback::state::{
-    MAX_VOLUME, PlaybackState, VOLUME_STEP, clamp_volume, format_rate, format_time, step_rate,
+    DELAY_STEP_MS, MAX_VOLUME, PlaybackState, VOLUME_STEP, clamp_volume, format_delay, format_rate,
+    format_time, step_rate,
 };
 use crate::playback::{Command, Event, MediaSource, PlaybackError, RequestId};
 use crate::theme::metrics::{EDGE, HIT_TARGET, PANEL_WIDTH, ROW_HEIGHT, TARGET_GAP};
@@ -231,6 +233,26 @@ impl PlayerView {
             view.open_paths(initial_paths, true, window, cx);
         }
         view
+    }
+
+    /// The current playback snapshot.
+    pub fn model(&self) -> &PlayerModel {
+        &self.model
+    }
+
+    /// The session queue.
+    pub fn playlist(&self) -> &Playlist {
+        &self.playlist
+    }
+
+    /// The open side panel, if any.
+    pub fn panel(&self) -> Option<Panel> {
+        self.panel
+    }
+
+    /// The address field's state (for focus management and tests).
+    pub fn address_input(&self) -> &Entity<InputState> {
+        &self.url_input
     }
 
     // ----- Events from the playback actor -------------------------------------------------
@@ -970,6 +992,7 @@ impl PlayerView {
                 icon_button("error-dismiss", IconName::X, "Dismiss")
                     .on_click(cx.listener(|this, _, _, cx| this.dismiss_error(cx))),
             )
+            .test_support()
     }
 
     fn render_control_bar(
@@ -1276,6 +1299,50 @@ impl PlayerView {
                     ),
             ),
         );
+
+        content = content.child(section("Sync"));
+        let delay_row = |id: &'static str,
+                         label: &'static str,
+                         value: i64,
+                         on_change: fn(i64) -> Command,
+                         cx: &mut Context<Self>| {
+            let step = |delta: i64, icon: IconName, name: &'static str, cx: &mut Context<Self>| {
+                icon_button(SharedString::from(format!("{id}-{name}")), icon, name)
+                    .disabled(!has_media)
+                    .on_click(cx.listener(move |this, _, _, _| {
+                        this.controller.send(on_change(value + delta));
+                    }))
+            };
+            h_flex()
+                .px(EDGE)
+                .gap_2()
+                .items_center()
+                .child(div().flex_1().text_sm().child(label))
+                .child(step(-DELAY_STEP_MS, IconName::Minus, "Earlier", cx))
+                .child(
+                    div()
+                        .min_w(px(64.))
+                        .text_center()
+                        .text_sm()
+                        .child(SharedString::from(format_delay(value))),
+                )
+                .child(step(DELAY_STEP_MS, IconName::Plus, "Later", cx))
+        };
+        content = content
+            .child(delay_row(
+                "audio-delay",
+                "Audio delay",
+                self.model.audio_delay_ms,
+                Command::SetAudioDelay,
+                cx,
+            ))
+            .child(delay_row(
+                "subtitle-delay",
+                "Subtitle delay",
+                self.model.subtitle_delay_ms,
+                Command::SetSubtitleDelay,
+                cx,
+            ));
 
         content = content.child(section("Speed"));
         let mut rates = h_flex().px(EDGE).flex_wrap().gap(TARGET_GAP);

@@ -207,6 +207,10 @@ pub enum Command {
     /// `-1` disables subtitles.
     SelectSubtitleTrack(i32),
     LoadExternalSubtitle(PathBuf),
+    /// Audio delay in milliseconds (positive = later). Applies to the current item.
+    SetAudioDelay(i64),
+    /// Subtitle delay in milliseconds (positive = later). Applies to the current item.
+    SetSubtitleDelay(i64),
     /// Attach (or detach with `None`) the native drawable LibVLC renders into.
     SetVideoTarget(Option<VideoTarget>),
 }
@@ -260,6 +264,11 @@ pub enum Event {
     },
     RateChanged {
         rate: f32,
+    },
+    DelaysChanged {
+        request: RequestId,
+        audio_ms: i64,
+        subtitle_ms: i64,
     },
     EndReached {
         request: RequestId,

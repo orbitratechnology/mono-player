@@ -169,6 +169,18 @@ impl Player {
         unsafe { sys::libvlc_video_set_spu(self.player.raw(), id) == 0 }
     }
 
+    /// Audio delay relative to video, in milliseconds.
+    pub fn set_audio_delay(&self, ms: i64) -> bool {
+        // SAFETY: valid player pointer; LibVLC takes microseconds.
+        unsafe { sys::libvlc_audio_set_delay(self.player.raw(), ms * 1000) == 0 }
+    }
+
+    /// Subtitle delay relative to video, in milliseconds.
+    pub fn set_subtitle_delay(&self, ms: i64) -> bool {
+        // SAFETY: valid player pointer; LibVLC takes microseconds.
+        unsafe { sys::libvlc_video_set_spu_delay(self.player.raw(), ms * 1000) == 0 }
+    }
+
     /// Attach an external subtitle file and select it.
     pub fn add_subtitle_file(&self, path: &Path) -> bool {
         let Ok(uri) = CString::new(path_to_file_uri(path)) else {
