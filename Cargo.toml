@@ -1,0 +1,59 @@
+[package]
+name = "mono-player"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+description = "A fast, monochrome desktop media player built on GPUI Kit and LibVLC."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+default-run = "mono-player"
+
+[lib]
+name = "mono_player"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mono-player"
+path = "src/main.rs"
+
+[dependencies]
+# GPUI Kit is the only GPUI dependency: it pins the matching `gpui-pre-*` set.
+gpui-kit = "=0.7.1"
+# LibVLC binding. Kept behind `playback::vlc_adapter`; nothing else imports it.
+vlc-rs = "=0.3.0"
+# Wakes the UI from the playback thread without polling.
+futures = "0.3"
+# Small versioned settings file.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Native video surface handle extraction (same major as GPUI's).
+raw-window-handle = "0.6"
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+x11rb = "0.13"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSView", "objc2-core-foundation"] }
+
+[dev-dependencies]
+gpui-kit = { version = "=0.7.1", features = ["test-support"] }
+
+# GPUI Kit's guidance: debug builds of the framework are slow at runtime.
+# Optimise dependencies while keeping our own crate fast to rebuild.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
