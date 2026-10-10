@@ -6,14 +6,14 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::{Disableable as _, Icon, h_flex};
 use gpui_kit::{
     App, ClickEvent, ElementId, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled as _,
-    TestSupportExt as _, Window, div, prelude::FluentBuilder as _,
+    ParentElement as _, RenderOnce, SharedString, Styled as _, TestSupportExt as _, Window, div,
+    prelude::FluentBuilder as _,
 };
 
 use super::icon_button;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use crate::theme::metrics::{EDGE, ROW_HEIGHT};
 use crate::theme::tokens;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 
 type Handler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
