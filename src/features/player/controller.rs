@@ -17,6 +17,8 @@ pub struct PlaybackController {
     volume: u8,
     muted: bool,
     rate: f32,
+    /// `Some` for a recording controller: commands are kept instead of sent to a thread.
+    recorded: Option<Vec<Command>>,
 }
 
 impl PlaybackController {
@@ -31,9 +33,38 @@ impl PlaybackController {
             volume,
             muted,
             rate: 1.0,
+            recorded: None,
         };
         controller.respawn();
         (controller, receiver)
+    }
+
+    /// A controller without a playback thread, for UI tests: commands are recorded and the
+    /// caller drives the view by sending events into the returned sender (on its own thread,
+    /// which keeps GPUI's deterministic test scheduler happy).
+    pub fn recording() -> (Self, UnboundedReceiver<Event>) {
+        let (events, receiver) = unbounded();
+        let controller = Self {
+            handle: None,
+            events,
+            next_request: 0,
+            video_target: None,
+            volume: 80,
+            muted: false,
+            rate: 1.0,
+            recorded: Some(Vec::new()),
+        };
+        (controller, receiver)
+    }
+
+    /// Commands sent so far by a recording controller.
+    pub fn recorded(&self) -> &[Command] {
+        self.recorded.as_deref().unwrap_or_default()
+    }
+
+    /// The sender events arrive on (used by tests to play the actor's role).
+    pub fn event_sender(&self) -> UnboundedSender<Event> {
+        self.events.clone()
     }
 
     fn respawn(&mut self) {
@@ -60,6 +91,10 @@ impl PlaybackController {
             Command::SetMuted(muted) => self.muted = *muted,
             Command::SetRate(rate) => self.rate = *rate,
             _ => {}
+        }
+        if let Some(recorded) = &mut self.recorded {
+            recorded.push(command);
+            return;
         }
         let command = match &self.handle {
             Some(handle) => match handle.send(command) {

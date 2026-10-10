@@ -114,8 +114,23 @@ impl PlayerView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let backend = PlaybackController::new(settings.volume, settings.muted);
+        Self::with_controller(backend, settings, settings_path, initial_paths, window, cx)
+    }
+
+    /// Build the view around a given controller (e.g. [`PlaybackController::recording`]).
+    pub fn with_controller(
+        (controller, mut events): (
+            PlaybackController,
+            futures::channel::mpsc::UnboundedReceiver<Event>,
+        ),
+        settings: Settings,
+        settings_path: Option<PathBuf>,
+        initial_paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let focus_handle = cx.focus_handle();
-        let (controller, mut events) = PlaybackController::new(settings.volume, settings.muted);
 
         let timeline = cx.new(|_| {
             SliderState::new()
@@ -248,6 +263,11 @@ impl PlayerView {
     /// The open side panel, if any.
     pub fn panel(&self) -> Option<Panel> {
         self.panel
+    }
+
+    /// The playback controller (tests inspect recorded commands through it).
+    pub fn controller(&self) -> &PlaybackController {
+        &self.controller
     }
 
     /// The address field's state (for focus management and tests).

@@ -9,9 +9,10 @@ use gpui_kit::{
     AppContext as _, Bounds, Entity, Point, TestAppContext, WindowBounds, WindowHandle,
     WindowOptions, base::Root, px, size,
 };
+use mono_player::features::player::controller::PlaybackController;
 use mono_player::features::player::view::{Panel, PlayerView};
 use mono_player::persistence::settings::Settings;
-use mono_player::playback::PlaybackError;
+use mono_player::playback::{Command, Event, PlaybackError, RequestId};
 use mono_player::{actions, theme};
 
 fn open_player(cx: &mut TestAppContext) -> (WindowHandle<Root>, Entity<PlayerView>) {
@@ -29,7 +30,18 @@ fn open_player(cx: &mut TestAppContext) -> (WindowHandle<Root>, Entity<PlayerVie
             },
             cx,
             |window, cx| {
-                cx.new(|cx| PlayerView::new(Settings::default(), None, Vec::new(), window, cx))
+                // No playback thread: commands are recorded and events are injected by the
+                // test, keeping GPUI's test scheduler deterministic.
+                cx.new(|cx| {
+                    PlayerView::with_controller(
+                        PlaybackController::recording(),
+                        Settings::default(),
+                        None,
+                        Vec::new(),
+                        window,
+                        cx,
+                    )
+                })
             },
         )
         .expect("open test window");
@@ -211,16 +223,55 @@ async fn queue_rows_reorder_remove_and_report_failures(cx: &mut TestAppContext) 
     })
     .unwrap();
 
-    // The playback thread reports the missing file; the UI shows it without a modal.
-    cx.executor().allow_parking();
+    // Opening queued the first item; playing row b opened a second request.
+    let sender = cx.update(|cx| {
+        let player = view.read(cx);
+        let opens: Vec<_> = player
+            .controller()
+            .recorded()
+            .iter()
+            .filter_map(|c| match c {
+                Command::Open { request, .. } => Some(*request),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(opens, vec![RequestId(1), RequestId(2)]);
+        player.controller().event_sender()
+    });
+
+    // A late failure for the replaced request is ignored; one for the current request shows a
+    // non-modal banner and marks the row.
+    sender
+        .unbounded_send(Event::Error {
+            request: Some(RequestId(1)),
+            error: PlaybackError::FileNotFound("/nonexistent/mono-player-ui/a.mp3".into()),
+        })
+        .unwrap();
+    sender
+        .unbounded_send(Event::Error {
+            request: Some(RequestId(2)),
+            error: PlaybackError::FileNotFound("/nonexistent/mono-player-ui/b.mp3".into()),
+        })
+        .unwrap();
     let view_for_wait = view.clone();
-    cx.wait_for(handle.into(), Duration::from_secs(10), move |_, cx| {
+    cx.wait_for(handle.into(), Duration::from_secs(1), move |_, cx| {
         matches!(
-            view_for_wait.read(cx).model().error,
-            Some(PlaybackError::FileNotFound(_))
+            &view_for_wait.read(cx).model().error,
+            Some(PlaybackError::FileNotFound(path)) if path.ends_with("b.mp3")
         )
     })
     .await;
+    cx.update(|cx| {
+        let player = view.read(cx);
+        let failed: Vec<_> = player
+            .playlist()
+            .items()
+            .iter()
+            .filter(|i| i.failed)
+            .map(|i| i.title.clone())
+            .collect();
+        assert_eq!(failed, vec!["b.mp3".to_owned()]);
+    });
     cx.update_window(handle.into(), |_, window, _| {
         assert!(window.find("error-banner").visible());
     })

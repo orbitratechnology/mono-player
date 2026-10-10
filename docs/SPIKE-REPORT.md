@@ -70,13 +70,14 @@ video output and no audio track as `PlaybackFailed`.
 | Metric | Debug build | Release build |
 |---|---|---|
 | LibVLC initialized at startup | No (lazy; first media request) | No |
-| LibVLC `libvlc_new` time on first open | 170–390 ms | RELEASE_LIBVLC_START |
-| Idle CPU, no media, 20 s average | 0.8 % of one core | RELEASE_IDLE_CPU |
-| Idle RSS, no media | 181 MB | RELEASE_IDLE_RSS |
-| 1080p30 H.264 playback CPU (software decode + llvmpipe GL + lavapipe UI) | 51–91 % of one core | RELEASE_PLAY_CPU |
-| 1080p30 playback RSS | 421 MB | RELEASE_PLAY_RSS |
+| LibVLC `libvlc_new` time on first open | 170–390 ms | 156 ms |
+| Idle CPU, no media, 20 s average | 0.8 % of one core | 0.65 % of one core |
+| Idle RSS, no media | 181 MB | 179 MB |
+| 1080p30 H.264 playback CPU (software decode + llvmpipe GL + lavapipe UI) | 51–91 % of one core | 78 % of one core |
+| 1080p30 playback RSS | 421 MB | 416 MB |
+| Cold launch to visible window (5 runs) | — | 183–215 ms |
 | Progress events per second while playing | ≤ 8 (asserted ≤ 10 in tests) | same |
-| Teardown (stop + release LibVLC) | 35–140 ms | RELEASE_TEARDOWN |
+| Teardown (stop + release LibVLC) | 35–140 ms | 66 ms |
 
 The idle RSS includes Mesa's software Vulkan driver; the PRD's ≤ 100 MB idle target must be
 measured on reference hardware with a real GPU driver before it is judged. Playback CPU here is
