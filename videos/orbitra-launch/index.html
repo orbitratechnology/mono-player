@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Orbitra Tech — Launch</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Poppins"; font-weight: 500; src: url("assets/fonts/poppins-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Poppins"; font-weight: 600; src: url("assets/fonts/poppins-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Poppins"; font-weight: 700; src: url("assets/fonts/poppins-latin-700-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Poppins"; font-weight: 800; src: url("assets/fonts/poppins-latin-800-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 400; src: url("assets/fonts/inter-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 500; src: url("assets/fonts/inter-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 600; src: url("assets/fonts/inter-latin-600-normal.woff2") format("woff2"); }
+
+      :root {
+        /* Brand tokens captured from orbitratech.net */
+        --paper: #fafdff;
+        --paper-3: #edf5fb;
+        --tint: #e3f5ff;
+        --ink: #141f32;
+        --ink-muted: #343b45;
+        --accent: #0070a6;
+        --accent-strong: #005b94;
+        --green: #007e46;
+        --rule: #dae3e9;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--paper); }
+      #root {
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+        font-family: "Inter", sans-serif; color: var(--ink);
+      }
+      .scene { position: absolute; inset: 0; overflow: hidden; }
+      .fill { position: absolute; inset: 0; }
+      .center { position: absolute; inset: 0; display: grid; place-items: center; }
+      .display { font-family: "Poppins", sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+
+      /* ---------- Scene 1: logo ---------- */
+      #s1 { background: var(--accent); }
+      #s1-ring { width: 700px; height: 700px; border-radius: 50%; border: 4px solid rgba(255, 255, 255, 0.35); }
+      #s1-ring2 { width: 860px; height: 860px; border-radius: 50%; border: 2px dashed rgba(255, 255, 255, 0.22); }
+      #s1-disc { width: 520px; height: 520px; border-radius: 50%; background: var(--paper); box-shadow: 0 30px 80px rgba(0, 40, 70, 0.35); }
+      #s1-logo { width: 400px; height: 400px; }
+      #s1-word {
+        position: absolute; left: 0; right: 0; top: 1330px; text-align: center;
+        color: #fff; font-size: 120px; line-height: 1;
+      }
+      #s1-word span { display: inline-block; }
+      #s1-tag {
+        position: absolute; left: 0; right: 0; top: 1490px; text-align: center;
+        color: rgba(255, 255, 255, 0.85); font-size: 34px; font-weight: 500; letter-spacing: 0.32em; text-transform: uppercase;
+      }
+      .s1-c { position: absolute; inset: 0; display: grid; place-items: center; padding-bottom: 260px; }
+
+      /* ---------- Scene 2: kinetic headline ---------- */
+      #s2 { background: var(--paper); }
+      #s2-glow { background: radial-gradient(900px 900px at 50% 45%, var(--tint), rgba(227, 245, 255, 0) 70%); }
+      #s2-orbit { width: 1500px; height: 1500px; border-radius: 50%; border: 3px solid rgba(0, 112, 166, 0.10); }
+      .word { font-family: "Poppins", sans-serif; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: var(--ink); white-space: nowrap; }
+      .word.blue { color: var(--accent); }
+      #s2-stack { position: absolute; left: 90px; right: 60px; top: 640px; }
+      .line { overflow: hidden; padding-bottom: 14px; }
+      .line > div { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 118px; line-height: 1.12; letter-spacing: -0.03em; white-space: nowrap; }
+      #s2-eyebrow { color: var(--accent); font-size: 32px; font-weight: 600; letter-spacing: 0.24em; margin-bottom: 36px; }
+      #s2-bar { height: 14px; width: 420px; background: var(--accent); border-radius: 7px; margin-top: 30px; transform-origin: left center; }
+
+      /* ---------- Feature scenes ---------- */
+      .feat { background: var(--paper); }
+      .feat .bg { background:
+        radial-gradient(1000px 800px at 85% 75%, var(--tint), rgba(227, 245, 255, 0) 70%),
+        linear-gradient(180deg, var(--paper) 0%, var(--paper-3) 100%); }
+      .f-head { position: absolute; left: 80px; right: 80px; top: 150px; }
+      .f-chip {
+        display: inline-flex; align-items: center; gap: 18px;
+        font-size: 30px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent);
+      }
+      .f-chip b { font-family: "Poppins", sans-serif; color: #fff; background: var(--accent); border-radius: 999px; padding: 6px 22px; letter-spacing: 0.04em; font-weight: 700; }
+      .f-title { margin-top: 30px; font-size: 84px; line-height: 1.06; }
+      .f-title .tl { overflow: hidden; padding-bottom: 8px; }
+      .f-title .tl > div { white-space: nowrap; }
+      .f-sub { margin-top: 26px; font-size: 38px; line-height: 1.4; color: var(--ink-muted); max-width: 900px; }
+      .f-brand { position: absolute; right: 80px; top: 150px; width: 76px; height: 76px; }
+
+      .browser {
+        position: absolute; left: 70px; top: 720px; width: 940px; border-radius: 26px; overflow: hidden; background: #fff;
+        box-shadow: 0 40px 90px rgba(20, 31, 50, 0.18), 0 0 0 2px var(--rule);
+      }
+      .browser .bar { height: 56px; background: #f1f5f9; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+      .browser .bar i { width: 16px; height: 16px; border-radius: 50%; background: #cbd5e1; display: block; }
+      .browser .bar .url { margin-left: 18px; flex: 1; height: 32px; border-radius: 16px; background: #fff; color: #6d7179; font-size: 20px; display: flex; align-items: center; padding-left: 20px; }
+      .browser .shot { height: 574px; overflow: hidden; }
+      .browser img { width: 940px; display: block; }
+
+      .phone {
+        position: absolute; border-radius: 64px; background: #0d1422; padding: 16px;
+        box-shadow: 0 50px 100px rgba(20, 31, 50, 0.32);
+      }
+      .phone .screen { width: 100%; height: 100%; border-radius: 50px; overflow: hidden; background: #fff; position: relative; }
+      .phone .screen img { width: 100%; display: block; }
+      .phone .notch { position: absolute; top: 16px; left: 50%; margin-left: -70px; width: 140px; height: 34px; border-radius: 0 0 20px 20px; background: #0d1422; z-index: 2; }
+      #f1-phone { left: 660px; top: 1130px; width: 350px; height: 680px; border-radius: 52px; padding: 12px; }
+      #f1-phone .screen { border-radius: 42px; }
+      #f1-phone .notch { top: 12px; width: 110px; margin-left: -55px; height: 26px; }
+
+      #f2-phone { left: 260px; top: 700px; width: 560px; height: 1140px; }
+      .pill {
+        position: absolute; display: flex; align-items: center; gap: 16px; padding: 22px 34px; border-radius: 999px;
+        background: #fff; font-family: "Poppins", sans-serif; font-weight: 600; font-size: 32px; color: var(--ink);
+        box-shadow: 0 20px 50px rgba(20, 31, 50, 0.16), 0 0 0 2px var(--rule);
+      }
+      .pill .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--green); }
+      #f2-p1 { left: 50px; top: 980px; }
+      #f2-p2 { left: 640px; top: 1300px; }
+      #f2-p3 { left: 70px; top: 1560px; }
+
+      #f3-card {
+        position: absolute; left: 110px; top: 720px; width: 860px; height: 1110px; border-radius: 40px; overflow: hidden;
+        background: #f5fbff; box-shadow: 0 40px 90px rgba(20, 31, 50, 0.16), 0 0 0 2px var(--rule);
+      }
+      #f3-card img { width: 860px; display: block; }
+
+      /* ---------- Wipe ---------- */
+      #wipe { position: absolute; inset: 0; background: var(--accent); z-index: 50; }
+
+      /* ---------- Scene 6: CTA ---------- */
+      #s6 { background: var(--accent); color: #fff; }
+      #s6-glow { background: radial-gradient(900px 900px at 50% 40%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 70%); }
+      #s6-wrap { position: absolute; left: 80px; right: 80px; top: 360px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+      #s6-disc { width: 200px; height: 200px; border-radius: 50%; background: var(--paper); display: grid; place-items: center; box-shadow: 0 24px 60px rgba(0, 40, 70, 0.3); }
+      #s6-disc img { width: 160px; height: 160px; }
+      #s6-title { margin-top: 90px; font-size: 112px; line-height: 1.06; }
+      #s6-title .tl { overflow: hidden; padding-bottom: 8px; }
+      #s6-sub { margin-top: 36px; font-size: 38px; line-height: 1.4; color: rgba(255, 255, 255, 0.88); }
+      #s6-btn {
+        margin-top: 90px; display: flex; align-items: center; gap: 22px; padding: 34px 64px; border-radius: 999px;
+        background: var(--green); color: #fff; font-family: "Poppins", sans-serif; font-weight: 600; font-size: 46px;
+        box-shadow: 0 20px 50px rgba(0, 40, 30, 0.35);
+      }
+      #s6-btn svg { width: 54px; height: 54px; }
+      #s6-note { margin-top: 30px; font-size: 30px; color: rgba(255, 255, 255, 0.8); }
+      #s6-url { margin-top: 150px; font-family: "Poppins", sans-serif; font-weight: 700; font-size: 92px; letter-spacing: -0.01em; }
+      #s6-line { margin-top: 10px; height: 8px; width: 640px; border-radius: 4px; background: #fff; transform-origin: left center; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+
+      <!-- 0–3s · Logo reveal -->
+      <section id="s1" class="scene clip" data-start="0" data-duration="3" data-track-index="0">
+        <div class="s1-c"><div id="s1-ring2"></div></div>
+        <div class="s1-c"><div id="s1-ring"></div></div>
+        <div class="s1-c"><div id="s1-disc"></div></div>
+        <div class="s1-c"><img id="s1-logo" src="assets/orbitra_logo.png" alt="Orbitra Tech logo" /></div>
+        <div id="s1-word" class="display"><span>Orbitra</span> <span>Tech</span></div>
+        <div id="s1-tag">Engineered in Sri Lanka</div>
+      </section>
+
+      <!-- 3–8s · Kinetic headline -->
+      <section id="s2" class="scene clip" data-start="3" data-duration="5" data-track-index="0">
+        <div id="s2-glow" class="fill"></div>
+        <div class="center"><div id="s2-orbit"></div></div>
+        <div class="center"><div class="word w" style="font-size: 230px">Website</div></div>
+        <div class="center"><div class="word w blue" style="font-size: 420px">&amp;</div></div>
+        <div class="center"><div class="word w" style="font-size: 330px">App</div></div>
+        <div class="center"><div class="word w" style="font-size: 142px">Development</div></div>
+        <div class="center"><div class="word w" style="font-size: 330px">in</div></div>
+        <div class="center"><div class="word w blue" style="font-size: 200px">Sri Lanka</div></div>
+        <div id="s2-stack">
+          <div id="s2-eyebrow">ORBITRA TECH · BERUWALA</div>
+          <div class="line"><div>Website &amp; App</div></div>
+          <div class="line"><div>Development in</div></div>
+          <div class="line"><div style="color: var(--accent)">Sri Lanka</div></div>
+          <div id="s2-bar"></div>
+        </div>
+      </section>
+
+      <!-- 8–13s · Feature 1: Websites -->
+      <section id="f1" class="scene feat clip" data-start="8" data-duration="5" data-track-index="0">
+        <div class="bg fill"></div>
+        <img class="f-brand" src="assets/orbitra_logo.png" alt="" />
+        <div class="f-head">
+          <div class="f-chip"><b>01</b> Website development</div>
+          <div class="f-title display">
+            <div class="tl"><div>Built to convert</div></div>
+            <div class="tl"><div>on first visit.</div></div>
+          </div>
+          <div class="f-sub">Fast, mobile-first sites that guide visitors to one action — not twelve.</div>
+        </div>
+        <div class="browser" id="f1-browser">
+          <div class="bar"><i></i><i></i><i></i><div class="url">orbitratech.net</div></div>
+          <div class="shot"><img id="f1-shot" src="assets/showcase-desktop.png" alt="" /></div>
+        </div>
+        <div class="phone" id="f1-phone"><div class="notch"></div><div class="screen"><img id="f1-mshot" src="assets/ui-hero-mobile.png" alt="" /></div></div>
+      </section>
+
+      <!-- 13–18s · Feature 2: Mobile apps -->
+      <section id="f2" class="scene feat clip" data-start="13" data-duration="5" data-track-index="0">
+        <div class="bg fill"></div>
+        <img class="f-brand" src="assets/orbitra_logo.png" alt="" />
+        <div class="f-head">
+          <div class="f-chip"><b>02</b> Mobile apps</div>
+          <div class="f-title display">
+            <div class="tl"><div>Apps people</div></div>
+            <div class="tl"><div>keep installed.</div></div>
+          </div>
+          <div class="f-sub">Native iOS &amp; Android with the polish users expect.</div>
+        </div>
+        <div class="phone" id="f2-phone"><div class="notch"></div><div class="screen"><img id="f2-shot" src="assets/showcase-mobile.png" alt="" /></div></div>
+        <div class="pill" id="f2-p1"><span class="dot"></span>App Store</div>
+        <div class="pill" id="f2-p2"><span class="dot"></span>Google Play</div>
+        <div class="pill" id="f2-p3"><span class="dot"></span>Push &amp; offline</div>
+      </section>
+
+      <!-- 18–23s · Feature 3: Digital transformation -->
+      <section id="f3" class="scene feat clip" data-start="18" data-duration="5" data-track-index="0">
+        <div class="bg fill"></div>
+        <img class="f-brand" src="assets/orbitra_logo.png" alt="" />
+        <div class="f-head">
+          <div class="f-chip"><b>03</b> Digital transformation</div>
+          <div class="f-title display">
+            <div class="tl"><div>One platform.</div></div>
+            <div class="tl"><div>Every system wired in.</div></div>
+          </div>
+          <div class="f-sub">Replace spreadsheets and manual handoffs with software built around your team.</div>
+        </div>
+        <div id="f3-card" data-layout-allow-overflow><img id="f3-shot" src="assets/ui-hub.png" alt="" /></div>
+      </section>
+
+      <!-- 23–30s · CTA -->
+      <section id="s6" class="scene clip" data-start="23" data-duration="7" data-track-index="0">
+        <div id="s6-glow" class="fill"></div>
+        <div id="s6-wrap">
+          <div id="s6-disc"><img src="assets/orbitra_logo.png" alt="Orbitra Tech logo" /></div>
+          <div id="s6-title" class="display">
+            <div class="tl"><div>Ready to take</div></div>
+            <div class="tl"><div>your business</div></div>
+            <div class="tl"><div>digital?</div></div>
+          </div>
+          <div id="s6-sub">Free consultation · Fixed, transparent pricing</div>
+          <div id="s6-btn">
+            <svg viewBox="0 0 24 24" fill="#fff"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.26-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.62.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35zM12.05 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.44 9.88-9.88 9.88zm8.41-18.3A11.82 11.82 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.16-3.48-8.41z"/></svg>
+            Talk on WhatsApp
+          </div>
+          <div id="s6-note">We reply within 2 hours</div>
+          <div id="s6-url">orbitratech.net</div>
+          <div id="s6-line"></div>
+        </div>
+      </section>
+
+      <div id="wipe"></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const E = "expo.out";
+
+      // ---------- Scene 1: logo reveal (0–3s) ----------
+      tl.fromTo("#s1-disc", { scale: 0 }, { scale: 1, duration: 0.55, ease: "back.out(1.7)" }, 0.05)
+        .fromTo("#s1-logo", { scale: 0.2, rotation: -200, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.9, ease: E }, 0.18)
+        .fromTo("#s1-ring", { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: E }, 0.3)
+        .fromTo("#s1-ring2", { scale: 0.5, opacity: 0, rotation: 0 }, { scale: 1, opacity: 1, rotation: 40, duration: 2.4, ease: "power2.out" }, 0.38)
+        .fromTo("#s1-word span", { yPercent: 110, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.55, ease: E, stagger: 0.09 }, 0.85)
+        .fromTo("#s1-tag", { y: 30, opacity: 0, scale: 1.15 }, { y: 0, opacity: 1, scale: 1, duration: 0.7, ease: E }, 1.2)
+        // exit: everything clears, paper disc floods the frame
+        .to(["#s1-word", "#s1-tag", "#s1-ring", "#s1-ring2"], { opacity: 0, duration: 0.2, ease: "power2.in" }, 2.35)
+        .to("#s1-logo", { scale: 0.6, opacity: 0, duration: 0.25, ease: "power2.in" }, 2.4)
+        .to("#s1-disc", { scale: 9, duration: 0.45, ease: "power3.in" }, 2.5);
+
+      // ---------- Scene 2: kinetic headline (3–8s) ----------
+      tl.fromTo("#s2-orbit", { rotation: 0, scale: 0.9 }, { rotation: 30, scale: 1.05, duration: 5, ease: "none" }, 3);
+      const words = gsap.utils.toArray("#s2 .w");
+      const wt = [3.08, 3.6, 3.98, 4.38, 4.98, 5.36];
+      words.forEach((w, i) => {
+        tl.fromTo(w, { scale: 1.5, opacity: 0, y: 40, filter: "blur(14px)" },
+                     { scale: 1, opacity: 1, y: 0, filter: "blur(0px)", duration: 0.3, ease: E }, wt[i]);
+        const out = i < words.length - 1 ? wt[i + 1] - 0.06 : 6.0;
+        tl.to(w, { scale: 0.85, opacity: 0, y: -30, duration: 0.14, ease: "power2.in" }, out);
+      });
+      tl.set("#s2-stack", { opacity: 0 }, 0).set("#s2-stack", { opacity: 1 }, 6.1);
+      tl.fromTo("#s2-eyebrow", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.4, ease: E }, 6.12)
+        .fromTo("#s2-stack .line > div", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: E, stagger: 0.1 }, 6.15)
+        .fromTo("#s2-bar", { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: E }, 6.55)
+        .to("#s2-stack", { y: -20, duration: 1.4, ease: "none" }, 6.35);
+
+      // ---------- Wipes between scenes ----------
+      tl.set("#wipe", { yPercent: 100 }, 0);
+      [8, 13, 18].forEach((t) => {
+        tl.to("#wipe", { yPercent: 0, duration: 0.24, ease: "power3.in" }, t - 0.24)
+          .to("#wipe", { yPercent: -100, duration: 0.34, ease: "power3.out" }, t + 0.02)
+          .set("#wipe", { yPercent: 100 }, t + 0.4);
+      });
+      tl.to("#wipe", { yPercent: 0, duration: 0.24, ease: "power3.in" }, 22.76).set("#wipe", { yPercent: -100 }, 23.0);
+
+      // ---------- Feature scene helper ----------
+      function featIn(id, s) {
+        tl.fromTo(`${id} .f-chip`, { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.45, ease: E }, s + 0.12)
+          .fromTo(`${id} .f-title .tl > div`, { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: E, stagger: 0.08 }, s + 0.16)
+          .fromTo(`${id} .f-sub`, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, s + 0.4)
+          .fromTo(`${id} .f-brand`, { opacity: 0, rotation: -90, scale: 0.5 }, { opacity: 1, rotation: 0, scale: 1, duration: 0.6, ease: E }, s + 0.2);
+      }
+
+      // Feature 1 (8–13s)
+      featIn("#f1", 8);
+      tl.fromTo("#f1-browser", { y: 420, rotation: -4, opacity: 0 }, { y: 0, rotation: 0, opacity: 1, duration: 0.8, ease: E }, 8.25)
+        .fromTo("#f1-shot", { scale: 1.12, transformOrigin: "50% 0%" }, { scale: 1, duration: 4.4, ease: "power1.out" }, 8.25)
+        .fromTo("#f1-phone", { y: 500, rotation: 8 }, { y: 0, rotation: 3, duration: 0.8, ease: "back.out(1.4)" }, 8.65)
+        .fromTo("#f1-mshot", { y: 0 }, { y: -120, duration: 3.2, ease: "power1.inOut" }, 9.5)
+        .to("#f1-browser", { y: -24, duration: 3.6, ease: "none" }, 9.05);
+
+      // Feature 2 (13–18s)
+      featIn("#f2", 13);
+      tl.fromTo("#f2-phone", { y: 700, rotation: -6 }, { y: 0, rotation: 0, duration: 0.85, ease: E }, 13.22)
+        .fromTo("#f2-shot", { y: 0 }, { y: -48, duration: 3.4, ease: "power1.inOut" }, 13.9)
+        .fromTo("#f2-p1", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 13.85)
+        .fromTo("#f2-p2", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 14.15)
+        .fromTo("#f2-p3", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 14.45)
+        .to("#f2-p1", { y: -30, duration: 3.5, ease: "sine.inOut" }, 14.4)
+        .to("#f2-p2", { y: 26, duration: 3.3, ease: "sine.inOut" }, 14.65)
+        .to("#f2-p3", { y: -22, duration: 3.0, ease: "sine.inOut" }, 14.95);
+
+      // Feature 3 (18–23s)
+      featIn("#f3", 18);
+      tl.fromTo("#f3-card", { y: 600, scale: 0.92 }, { y: 0, scale: 1, duration: 0.85, ease: E }, 18.22)
+        .fromTo("#f3-shot", { y: 0 }, { y: -374, duration: 3.4, ease: "power2.inOut" }, 19.2);
+
+      // ---------- CTA (23–30s) ----------
+      tl.fromTo("#s6-disc", { scale: 0, rotation: -120 }, { scale: 1, rotation: 0, duration: 0.7, ease: "back.out(1.6)" }, 23.05)
+        .fromTo("#s6-title .tl > div", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: E, stagger: 0.09 }, 23.25)
+        .fromTo("#s6-sub", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 23.7)
+        .fromTo("#s6-btn", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.8)" }, 24.0)
+        .fromTo("#s6-note", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 24.35)
+        .fromTo("#s6-url", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.55, ease: E }, 24.5)
+        .fromTo("#s6-line", { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: E }, 24.8)
+        .to("#s6-btn", { scale: 1.07, duration: 0.3, ease: "power2.out", yoyo: true, repeat: 3 }, 25.8)
+        .to("#s6-btn", { scale: 1.07, duration: 0.3, ease: "power2.out", yoyo: true, repeat: 1 }, 28.0);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

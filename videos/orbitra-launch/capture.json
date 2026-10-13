@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "projectDir": "/home/user/mono-player/videos/orbitra-launch/capture",
+  "url": "https://orbitratech.net",
+  "httpStatus": 200,
+  "title": "Web & App Development in Sri Lanka | Orbitra Tech",
+  "screenshots": 11,
+  "assets": 30,
+  "dropped": {
+    "size-floor": 0,
+    "budget-exhausted": 54,
+    "cap-reached": 20,
+    "unavailable": 0
+  },
+  "detectedSections": 24,
+  "fonts": [
+    "Poppins",
+    "Inter"
+  ],
+  "fontsDetailed": [
+    {
+      "family": "Poppins",
+      "weights": [
+        600,
+        700
+      ],
+      "variable": false
+    },
+    {
+      "family": "Inter",
+      "weights": [
+        500,
+        600,
+        700
+      ],
+      "variable": false
+    }
+  ],
+  "animations": {
+    "webAnimations": 21,
+    "cssDeclarations": 163,
+    "scrollTargets": 30,
+    "cdpAnimations": 99,
+    "canvases": 0
+  },
+  "warnings": [
+    "11/21 requested screenshot files captured: --capture-budget exhausted during screenshots",
+    "74 referenced asset(s) are not in this capture (54 budget-exhausted, 20 cap-reached). A thin capture with no drops is a thin page; this one was truncated.",
+    "Capture budget exhausted before vision captioning; catalog descriptions were preserved.",
+    "Capture budget exhausted before contact sheets; source images were preserved."
+  ],
+  "lastPhase": {
+    "schema": "hyperframes.capture.phase.v1",
+    "phase": "complete",
+    "status": "completed",
+    "remainingMs": 0
+  }
+}
