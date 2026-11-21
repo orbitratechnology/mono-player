@@ -1175,7 +1175,8 @@ impl PlayerView {
         self.remember_position();
         self.sync_video_visibility();
         if let Some(link) = self.overlay.take() {
-            drop(link.host);
+            // `link` (and with it the native host, which detaches the macOS child panel) drops
+            // at the end of this block, before the deferred close runs.
             let overlay = link.window;
             window.defer(cx, move |_, cx| {
                 let _ = overlay.update(cx, |_, window, _| window.remove_window());

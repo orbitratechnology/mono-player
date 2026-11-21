@@ -129,8 +129,10 @@ parent is flipped. The macOS CI workflow builds `Mono Player.app` with LibVLC 3.
 integration tests on macOS, launches the app on a 1080p file and screenshots it: the window,
 UI and playback (VideoToolbox decoding, progressing timeline) work, but LibVLC's OpenGL video
 output cannot create a CGL context on GitHub's virtual Macs, so the picture itself is not
-confirmed. The floating controls are a child `NSPanel` (`overlay_macos.rs`). **To validate on a
-real Mac:**
+confirmed. The floating controls are a child `NSPanel` (`overlay_macos.rs`); the CI screenshot
+shows the pill rendered bottom-centre over the player window with title, timeline, transport,
+volume, speed and panel buttons. **To validate on a real Mac:** pointer interaction with the
+panel,
 layering with GPUI's Metal layer-backed view, Retina scaling, native fullscreen spaces, and the
 full objective list above.
 
