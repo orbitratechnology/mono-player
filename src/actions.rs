@@ -1,7 +1,9 @@
 //! Keyboard actions and their bindings: one canonical table drives both `bind_keys` and the
 //! shortcuts list in the UI, so help text can never drift from behavior.
 
-use gpui_kit::{Action, App, KeyBinding, actions};
+use std::rc::Rc;
+
+use gpui_kit::{Action, App, KeyBinding, KeyBindingContextPredicate, actions};
 
 actions!(
     mono_player,
@@ -44,7 +46,6 @@ pub struct Shortcut {
     pub display: &'static str,
     pub description: &'static str,
     action: fn() -> Box<dyn Action>,
-    binding: fn(&'static str, &'static str) -> KeyBinding,
     context: &'static str,
 }
 
@@ -53,8 +54,20 @@ impl Shortcut {
         (self.action)()
     }
 
-    fn key_binding(&self) -> KeyBinding {
-        (self.binding)(self.keys, self.context)
+    /// `KeyBinding::load` resolves `secondary-` for the host OS (Cmd on macOS, Ctrl elsewhere);
+    /// `KeyBinding::new` only accepts explicit modifiers since GPUI 0.3.12.
+    fn key_binding(&self, cx: &App) -> KeyBinding {
+        let context = KeyBindingContextPredicate::parse(self.context)
+            .expect("shortcut contexts are valid predicates");
+        KeyBinding::load(
+            self.keys,
+            self.action(),
+            Some(Rc::new(context)),
+            false,
+            None,
+            cx,
+        )
+        .expect("shortcut keystrokes are valid")
     }
 }
 
@@ -65,7 +78,6 @@ macro_rules! shortcut {
             display: $display,
             description: $description,
             action: || Box::new($action),
-            binding: |keys, context| KeyBinding::new(keys, $action, Some(context)),
             context: $context,
         }
     };
@@ -145,5 +157,6 @@ pub const SHORTCUTS: &[Shortcut] = &[
 
 /// Register every binding from [`SHORTCUTS`].
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys(SHORTCUTS.iter().map(Shortcut::key_binding));
+    let bindings: Vec<KeyBinding> = SHORTCUTS.iter().map(|s| s.key_binding(cx)).collect();
+    cx.bind_keys(bindings);
 }

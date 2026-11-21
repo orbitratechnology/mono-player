@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 # GPUI Kit is the only GPUI dependency: it pins the matching `gpui-pre-*` set.
-gpui-kit = "=0.7.1"
+gpui-kit = "=0.10.0"
 # LibVLC binding. Kept behind `playback::vlc_adapter`; nothing else imports it.
 vlc-rs = "=0.3.0"
 # Wakes the UI from the playback thread without polling.
@@ -45,7 +45,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSView", "objc2-core-foundation"] }
 
 [dev-dependencies]
-gpui-kit = { version = "=0.7.1", features = ["test-support"] }
+gpui-kit = { version = "=0.10.0", features = ["test-support"] }
 
 # GPUI Kit's guidance: debug builds of the framework are slow at runtime.
 # Optimise dependencies while keeping our own crate fast to rebuild.
