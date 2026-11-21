@@ -54,7 +54,10 @@ echo "--- linkage"
 otool -L "$CONTENTS/MacOS/mono-player" | grep -i vlc
 otool -l "$CONTENTS/MacOS/mono-player" | awk '/LC_RPATH/{getline; getline; print "rpath: " $2}'
 
-# Ad-hoc signature: required on Apple silicon. Not notarized.
-codesign --force --deep --sign - "$APP"
+# Ad-hoc signature (required on Apple silicon; not notarized). Sign only our executable and the
+# bundle: libvlc and its plugins keep VideoLAN's signatures untouched, which also keeps VLC's
+# plugin cache (keyed on file size and mtime) valid so startup does not rescan every plugin.
+codesign --force --sign - "$CONTENTS/MacOS/mono-player"
+codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Packaged $APP"

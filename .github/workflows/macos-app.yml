@@ -78,6 +78,18 @@ jobs:
           cat smoke.log
           grep -q "LibVLC .* started" smoke.log
 
+      - name: Control (the same video in VLC's own player on this runner)
+        if: matrix.arch == 'arm64'
+        run: |
+          # GitHub's macOS VMs may not provide OpenGL contexts, which LibVLC 3's macOS video
+          # output needs. Running the official VLC.app on the same file tells a VM limitation
+          # apart from a problem in Mono Player's embedding.
+          "$RUNNER_TEMP/VLC.app/Contents/MacOS/VLC" -I dummy --play-and-exit --run-time=6 \
+            "$RUNNER_TEMP/test video.mp4" > vlc-control.log 2>&1 || true
+          grep -E "CGL|vout display error|video output creation failed" vlc-control.log \
+            && echo "VLC.app hits the same video-output error on this runner" \
+            || echo "VLC.app created a video output on this runner"
+
       - uses: actions/upload-artifact@v4
         with:
           name: Mono-Player-macOS-${{ matrix.arch }}
@@ -91,4 +103,5 @@ jobs:
           path: |
             dist/smoke-playing.png
             smoke.log
+            vlc-control.log
           if-no-files-found: ignore
