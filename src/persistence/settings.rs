@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::features::playlist::model::RepeatMode;
+use crate::playback::features::{EqualizerSettings, PlaybackOptions};
 use crate::playback::state::{MAX_VOLUME, clamp_volume};
 
 pub const CURRENT_VERSION: u32 = 1;
@@ -58,6 +59,13 @@ pub struct Settings {
     /// Resume recently played files where they stopped.
     pub resume_playback: bool,
     pub recents: Vec<RecentItem>,
+    pub equalizer: EqualizerSettings,
+    pub playback: PlaybackOptions,
+    /// Translucent (blurred where supported) window background; `None` follows the platform
+    /// default.
+    pub translucent_window: Option<bool>,
+    /// Preferred audio output device id; `None` is the system default.
+    pub audio_device: Option<String>,
 }
 
 impl Default for Settings {
@@ -71,6 +79,10 @@ impl Default for Settings {
             remember_recents: true,
             resume_playback: true,
             recents: Vec::new(),
+            equalizer: EqualizerSettings::default(),
+            playback: PlaybackOptions::default(),
+            translucent_window: None,
+            audio_device: None,
         }
     }
 }
@@ -92,8 +104,16 @@ impl Settings {
         serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".into())
     }
 
+    /// Whether the window should be translucent.
+    pub fn translucent(&self) -> bool {
+        self.translucent_window
+            .unwrap_or(crate::theme::translucent_by_default())
+    }
+
     fn sanitize(&mut self) {
         self.version = CURRENT_VERSION;
+        self.equalizer = std::mem::take(&mut self.equalizer).sanitized(10);
+        self.playback.network_caching_ms = self.playback.network_caching_ms.clamp(100, 60_000);
         self.volume = clamp_volume(i32::from(self.volume)).min(MAX_VOLUME);
         if self.window.is_some_and(|w| !w.is_plausible()) {
             self.window = None;
@@ -204,6 +224,12 @@ pub fn config_dir() -> Option<PathBuf> {
     }
 }
 
+/// Where snapshots are saved: `Pictures/Mono Player` in the user's home folder.
+pub fn snapshot_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    Some(PathBuf::from(home).join("Pictures").join("Mono Player"))
+}
+
 pub fn settings_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join(FILE_NAME))
 }
@@ -246,6 +272,11 @@ mod tests {
         };
         settings.touch_recent("/m/a.mkv", false);
         settings.record_position("/m/a.mkv", 60_000, Some(600_000));
+        settings.equalizer.enabled = true;
+        settings.equalizer.bands[2] = 4.5;
+        settings.playback.hardware_decoding = false;
+        settings.translucent_window = Some(false);
+        settings.audio_device = Some("hdmi".into());
         let parsed = Settings::from_json(&settings.to_json());
         assert_eq!(parsed, settings);
         assert_eq!(parsed.resume_position("/m/a.mkv"), Some(60_000));

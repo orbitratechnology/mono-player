@@ -7,7 +7,7 @@ before the full UI is committed. This report records what was verified, how, and
 
 | Component | Version |
 |---|---|
-| GPUI Kit | 0.7.1 (`gpui-pre-*` 0.3.8, resolved by GPUI Kit; `Cargo.lock` committed) |
+| GPUI Kit | 0.10.0 (`gpui-pre-*` 0.3.12, resolved by GPUI Kit; `Cargo.lock` committed). Initially validated on 0.7.1; the upgrade's only break was `KeyBinding::new` no longer resolving `secondary-` |
 | `vlc-rs` | 0.3.0 (crates.io; last release of the garkimasera repository) |
 | LibVLC | 3.0.20 "Vetinari" (Ubuntu 24.04 `libvlc5`, `vlc-plugin-base`, `vlc-plugin-video-output`) |
 | Rust | 1.97.0 stable |
@@ -59,6 +59,25 @@ controls could not be revealed. Fix: an `InputOnly` sibling with the same geomet
 above the video window; it selects nothing, so pointer events propagate from it directly to the
 GPUI window and never pass through LibVLC's window. Verified with `xdotool` in fullscreen.
 
+### Floating controls over the video (follow-up)
+
+The PRD's first layout kept the controls beside the video. Floating controls over the picture
+are a separate GPUI window reparented into the player window as an override-redirect child,
+stacked above the video and its input window (see `docs/ARCHITECTURE.md`). Verified under
+Xvfb + openbox with `xwininfo`/`xdotool`:
+
+- The pill (760×124) is a mapped child of the player window, bottom-centred over the video;
+  rounded corners come from the Shape extension.
+- A real pointer click on the pill's play/pause button paused playback (the reparented window
+  receives input); keys pressed after clicking the pill reach the player.
+- During video playback the pill hides after 2.5 s, stays while hovered, and reappears on
+  pointer movement over the video (through the InputOnly window) or any key.
+- Side panels open beside the video and the pill re-centres over the remaining video area.
+- Quitting closes the controls window before LibVLC is released; no X errors or hangs.
+
+Not verified here: translucency of the main window on Linux (screenshots of a compositing
+X server are not capturable in Xvfb), and the controls on macOS/Windows (see below).
+
 ### Finding: silent demuxer fallback
 
 A text file named `.mkv` was "played" by LibVLC's fallback demuxer and ended instantly with no
@@ -102,11 +121,16 @@ GPUI's DirectX/DirectComposition swap chain does not draw over child windows, th
 motion over LibVLC's inner window reaches GPUI (LibVLC disables its window when mouse input is
 off), DPI scaling, and the full objective list above.
 
-## macOS — implemented, not yet run
+## macOS — launches and plays in CI; picture unconfirmed
 
 `NSView` subclass added as a subview of GPUI's content view and passed to `set_nsobject`;
 `hitTest:` returns nil so the subtree is transparent to the mouse; frames are flipped unless the
-parent is flipped. Type-checked and Clippy-clean for `aarch64-apple-darwin`. **To validate:**
+parent is flipped. The macOS CI workflow builds `Mono Player.app` with LibVLC 3.0.21 bundled, runs the LibVLC
+integration tests on macOS, launches the app on a 1080p file and screenshots it: the window,
+UI and playback (VideoToolbox decoding, progressing timeline) work, but LibVLC's OpenGL video
+output cannot create a CGL context on GitHub's virtual Macs, so the picture itself is not
+confirmed. The floating controls are a child `NSPanel` (`overlay_macos.rs`). **To validate on a
+real Mac:**
 layering with GPUI's Metal layer-backed view, Retina scaling, native fullscreen spaces, and the
 full objective list above.
 

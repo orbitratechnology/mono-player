@@ -7,7 +7,6 @@ use gpui_kit::{
     div, px,
 };
 
-use crate::theme::metrics::{EDGE, HIT_TARGET};
 use crate::theme::tokens;
 
 #[derive(IntoElement)]
@@ -23,15 +22,14 @@ impl RenderOnce for Timeline {
         let t = tokens();
         let time_label = |text: SharedString| {
             div()
-                .min_w(px(56.))
+                .min_w(px(44.))
                 .flex_shrink_0()
-                .text_sm()
+                .text_xs()
                 .text_color(t.foreground_muted)
                 .child(text)
         };
         h_flex()
             .w_full()
-            .px(EDGE)
             .gap_3()
             .items_center()
             .child(time_label(self.elapsed))
@@ -40,7 +38,7 @@ impl RenderOnce for Timeline {
                 // area (pointer events land on the slider element inside).
                 h_flex()
                     .flex_1()
-                    .h(HIT_TARGET)
+                    .h(px(28.))
                     .items_center()
                     .child(Slider::new(&self.slider).disabled(!self.enabled).w_full()),
             )

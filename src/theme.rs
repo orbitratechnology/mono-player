@@ -62,6 +62,84 @@ impl Tokens {
 
 static TOKENS: LazyLock<Tokens> = LazyLock::new(Tokens::dark);
 
+/// Soft, layered surfaces for the floating controls and panels: translucent neutrals over the
+/// window background. All are pure grays (the PRD's monochrome rule); only alpha varies.
+#[derive(Clone, Copy, Debug)]
+pub struct Glass {
+    /// The floating control pill.
+    pub pill: Hsla,
+    /// Side panels.
+    pub panel: Hsla,
+    /// Grouped settings cards inside panels.
+    pub card: Hsla,
+    /// Hover/selected fills on glass.
+    pub chip: Hsla,
+    pub chip_active: Hsla,
+    /// 1 px outlines on glass.
+    pub hairline: Hsla,
+    /// The window background behind panels when the window is translucent.
+    pub window: Hsla,
+}
+
+fn gray(level: f32, alpha: f32) -> Hsla {
+    Hsla {
+        h: 0.,
+        s: 0.,
+        l: level,
+        a: alpha,
+    }
+}
+
+impl Glass {
+    /// `translucent` is false where the controls cannot be alpha-blended over the video (X11
+    /// child windows): they then use opaque equivalents of the same grays.
+    pub fn new(translucent: bool) -> Self {
+        let a = |alpha: f32| if translucent { alpha } else { 1.0 };
+        Self {
+            pill: gray(0.07, a(0.72)),
+            panel: gray(0.06, a(0.82)),
+            card: gray(1.0, 0.045),
+            chip: gray(1.0, 0.08),
+            chip_active: gray(1.0, 0.16),
+            hairline: gray(1.0, 0.09),
+            window: gray(0.0, a(0.62)),
+        }
+    }
+
+    pub fn all(&self) -> [(&'static str, Hsla); 7] {
+        [
+            ("pill", self.pill),
+            ("panel", self.panel),
+            ("card", self.card),
+            ("chip", self.chip),
+            ("chip_active", self.chip_active),
+            ("hairline", self.hairline),
+            ("window", self.window),
+        ]
+    }
+}
+
+/// Whether the floating controls are composited with real transparency on this platform.
+pub const fn overlay_translucent() -> bool {
+    cfg!(any(target_os = "macos", target_os = "windows"))
+}
+
+/// Glass tokens for the floating controls.
+pub fn overlay_glass() -> Glass {
+    Glass::new(overlay_translucent())
+}
+
+/// Glass tokens for the main window, honoring the user's translucency choice.
+pub fn window_glass(translucent: bool) -> Glass {
+    Glass::new(translucent)
+}
+
+/// Whether the main window is translucent by default: on where the platform blurs what is
+/// behind the window (macOS vibrancy, Windows Mica/acrylic); opt-in on Linux.
+pub const fn translucent_by_default() -> bool {
+    cfg!(any(target_os = "macos", target_os = "windows"))
+}
+
 /// The active token set.
 pub fn tokens() -> &'static Tokens {
     &TOKENS
@@ -85,6 +163,23 @@ pub mod metrics {
     pub const VOLUME_WIDTH: Pixels = px(112.);
     /// Edge padding of bars and panels.
     pub const EDGE: Pixels = px(12.);
+    /// Inner padding of the control pill and panel cards.
+    pub const INSET: Pixels = px(14.);
+    /// Corner radius of the floating control pill.
+    pub const PILL_RADIUS: f32 = 22.;
+    /// Height of the control pill (without an error row).
+    pub const PILL_HEIGHT: f32 = 124.;
+    /// Extra height when the pill shows an error.
+    pub const PILL_ERROR_HEIGHT: f32 = 52.;
+    /// The pill never grows wider than this.
+    pub const PILL_MAX_WIDTH: f32 = 760.;
+    /// Gap between the pill and the bottom/sides of the video.
+    pub const PILL_MARGIN: f32 = 20.;
+    /// Corner radius of panels and cards.
+    pub const PANEL_RADIUS: Pixels = px(18.);
+    pub const CARD_RADIUS: Pixels = px(14.);
+    /// Gap around the floating side panel.
+    pub const PANEL_MARGIN: Pixels = px(12.);
 }
 
 /// Contrast ratio between two colors (WCAG 2.x relative luminance).
@@ -228,6 +323,26 @@ mod tests {
         // Focus ring and played track: non-text 3:1 against their background.
         assert!(contrast_ratio(t.focus_ring, t.surface) >= 3.0);
         assert!(contrast_ratio(t.track_foreground, t.track_background) >= 3.0);
+    }
+
+    #[test]
+    fn glass_is_monochrome_and_readable() {
+        for translucent in [true, false] {
+            let glass = Glass::new(translucent);
+            for (name, color) in glass.all() {
+                assert_eq!(color.s, 0.0, "{name} must be a neutral gray");
+            }
+            // Text on the pill, composited over black video, keeps AA contrast.
+            let pill_over_black = Hsla {
+                a: 1.0,
+                l: glass.pill.l * glass.pill.a,
+                ..glass.pill
+            };
+            let t = Tokens::dark();
+            assert!(contrast_ratio(t.foreground, pill_over_black) >= 4.5);
+            assert!(contrast_ratio(t.foreground_muted, pill_over_black) >= 4.5);
+        }
+        assert_eq!(Glass::new(false).pill.a, 1.0);
     }
 
     #[test]

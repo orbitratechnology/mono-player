@@ -6,16 +6,21 @@ use std::time::Duration;
 
 use gpui_kit::test::{TestAppContextExt, TestWindowExt};
 use gpui_kit::{
-    AppContext as _, Bounds, Entity, Point, TestAppContext, WindowBounds, WindowHandle,
-    WindowOptions, base::Root, px, size,
+    AnyWindowHandle, AppContext as _, Bounds, Entity, Point, TestAppContext, WindowBounds,
+    WindowHandle, WindowOptions, base::Root, px, size,
 };
 use mono_player::features::player::controller::PlaybackController;
+use mono_player::features::player::overlay::open_controls;
 use mono_player::features::player::view::{Panel, PlayerView};
 use mono_player::persistence::settings::Settings;
+use mono_player::playback::PlaybackState;
 use mono_player::playback::{Command, Event, PlaybackError, RequestId};
 use mono_player::{actions, theme};
 
-fn open_player(cx: &mut TestAppContext) -> (WindowHandle<Root>, Entity<PlayerView>) {
+/// The player window, its floating controls window, and the player view.
+fn open_player(
+    cx: &mut TestAppContext,
+) -> (WindowHandle<Root>, AnyWindowHandle, Entity<PlayerView>) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         theme::install(cx);
@@ -45,14 +50,28 @@ fn open_player(cx: &mut TestAppContext) -> (WindowHandle<Root>, Entity<PlayerVie
             },
         )
         .expect("open test window");
-        (window.downcast::<Root>().expect("Base Root"), view)
+        let controls = open_controls(window, view.clone(), cx).expect("open controls window");
+        (
+            window.downcast::<Root>().expect("Base Root"),
+            controls,
+            view,
+        )
     })
 }
 
 #[gpui_kit::test]
 fn controls_have_labels_and_touch_sized_hit_areas(cx: &mut TestAppContext) {
-    let (handle, _) = open_player(cx);
+    let (handle, controls, _) = open_player(cx);
     cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        // The empty state offers the primary actions.
+        assert!(window.find("empty-open").visible());
+        assert!(window.find("empty-address").visible());
+        // The transport is not drawn in the player window: it floats in its own window.
+        assert!(window.try_find("transport-play-pause").is_none());
+    })
+    .unwrap();
+    cx.update_window(controls, |_, window, cx| {
         window.render_frame(cx);
 
         let play = window.find("transport-play-pause");
@@ -62,9 +81,9 @@ fn controls_have_labels_and_touch_sized_hit_areas(cx: &mut TestAppContext) {
         for (id, label) in [
             ("transport-previous", "Previous"),
             ("transport-next", "Next"),
-            ("transport-stop", "Stop"),
             ("volume-mute", "Mute"),
-            ("panel-tracks", "Audio, subtitles & speed"),
+            ("panel-tracks", "Audio, subtitles & chapters"),
+            ("panel-effects", "Equalizer & picture"),
             ("panel-queue", "Playlist"),
             ("panel-settings", "Settings"),
             ("toggle-fullscreen", "Fullscreen"),
@@ -77,16 +96,97 @@ fn controls_have_labels_and_touch_sized_hit_areas(cx: &mut TestAppContext) {
                 "{id} hit area is {bounds:?}"
             );
         }
-
-        // The empty state offers the primary action.
-        assert!(window.find("empty-open").visible());
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
+fn floating_controls_drive_the_player_window(cx: &mut TestAppContext) {
+    let (_, controls, view) = open_player(cx);
+    cx.update_window(controls, |_, window, cx| {
+        window.render_frame(cx);
+        // A click in the controls window runs in the player window.
+        window.click("panel-settings", cx);
+        assert_eq!(view.read(cx).panel(), Some(Panel::Settings));
+        window.click("panel-effects", cx);
+        assert_eq!(view.read(cx).panel(), Some(Panel::Effects));
+        window.click("volume-mute", cx);
+        assert!(view.read(cx).model().muted);
+        window.click("speed", cx);
+        assert_eq!(view.read(cx).model().rate, 1.25);
+        // Keys pressed while the controls window has focus act on the player too.
+        window.press("m", cx);
+        assert!(!view.read(cx).model().muted);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+async fn controls_hide_during_video_and_return_on_activity(cx: &mut TestAppContext) {
+    let (handle, controls, view) = open_player(cx);
+    cx.update_window(handle.into(), |_, window, cx| {
+        view.update(cx, |player, cx| {
+            player.open_paths(vec![PathBuf::from("/m/film.mkv")], true, window, cx)
+        });
+    })
+    .unwrap();
+    let sender = cx.update(|cx| view.read(cx).controller().event_sender());
+    for event in [
+        Event::StateChanged {
+            request: RequestId(1),
+            state: PlaybackState::Playing,
+        },
+        Event::VideoOutputChanged {
+            request: RequestId(1),
+            has_video: true,
+        },
+    ] {
+        sender.unbounded_send(event).unwrap();
+    }
+    cx.run_until_parked();
+    assert!(cx.update(|cx| view.read(cx).controls_visible()));
+    // The pointer leaves the controls (the test pointer starts on top of them).
+    cx.update_window(controls, |_, window, cx| {
+        window.dispatch_event(
+            gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent {
+                position: gpui_kit::point(px(-10.), px(-10.)),
+                pressed_button: None,
+                modifiers: Default::default(),
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    // Untouched video playback: the controls get out of the way…
+    cx.executor().advance_clock(Duration::from_secs(3));
+    cx.run_until_parked();
+    assert!(!cx.update(|cx| view.read(cx).controls_visible()));
+
+    // …and come back with any key press.
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.press("up", cx);
+    })
+    .unwrap();
+    assert!(cx.update(|cx| view.read(cx).controls_visible()));
+
+    // Paused video keeps them up.
+    sender
+        .unbounded_send(Event::StateChanged {
+            request: RequestId(1),
+            state: PlaybackState::Paused,
+        })
+        .unwrap();
+    cx.run_until_parked();
+    cx.executor().advance_clock(Duration::from_secs(5));
+    cx.run_until_parked();
+    assert!(cx.update(|cx| view.read(cx).controls_visible()));
+}
+
+#[gpui_kit::test]
 fn keyboard_shortcuts_drive_the_player(cx: &mut TestAppContext) {
-    let (handle, view) = open_player(cx);
+    let (handle, controls, view) = open_player(cx);
     cx.update_window(handle.into(), |_, window, cx| {
         window.render_frame(cx);
         let volume = view.read(cx).model().volume;
@@ -99,13 +199,23 @@ fn keyboard_shortcuts_drive_the_player(cx: &mut TestAppContext) {
 
         window.press("m", cx);
         assert!(view.read(cx).model().muted);
+    })
+    .unwrap();
+    cx.update_window(controls, |_, window, cx| {
+        window.render_frame(cx);
         assert_eq!(window.find("volume-mute").label(), Some("Unmute"));
+    })
+    .unwrap();
+    cx.update_window(handle.into(), |_, window, cx| {
         window.press("m", cx);
         assert!(!view.read(cx).model().muted);
 
         window.press("l", cx);
         assert_eq!(view.read(cx).panel(), Some(Panel::Queue));
-        assert!(window.find("tab-queue").visible());
+        let tab = window.find(gpui_kit::ElementId::NamedInteger("panel-tab".into(), 0));
+        assert_eq!(tab.label(), Some("Queue, selected"));
+        window.press("secondary-e", cx);
+        assert_eq!(view.read(cx).panel(), Some(Panel::Effects));
         window.press("t", cx);
         assert_eq!(view.read(cx).panel(), Some(Panel::Tracks));
         // Escape closes the panel when not fullscreen.
@@ -123,7 +233,7 @@ fn keyboard_shortcuts_drive_the_player(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn text_field_consumes_player_keys(cx: &mut TestAppContext) {
-    let (handle, view) = open_player(cx);
+    let (handle, _, view) = open_player(cx);
     cx.update_window(handle.into(), |_, window, cx| {
         window.render_frame(cx);
         window.press("l", cx);
@@ -142,7 +252,7 @@ fn text_field_consumes_player_keys(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn invalid_addresses_are_rejected_before_the_engine(cx: &mut TestAppContext) {
-    let (handle, view) = open_player(cx);
+    let (handle, controls, view) = open_player(cx);
     cx.update_window(handle.into(), |_, window, cx| {
         window.render_frame(cx);
         window.press("l", cx);
@@ -155,6 +265,11 @@ fn invalid_addresses_are_rejected_before_the_engine(cx: &mut TestAppContext) {
             Some(PlaybackError::UnsupportedScheme(_))
         ));
         assert!(view.read(cx).playlist().is_empty());
+    })
+    .unwrap();
+    // The error shows (non-modally) in the floating controls and can be dismissed there.
+    cx.update_window(controls, |_, window, cx| {
+        window.render_frame(cx);
         assert!(window.find("error-banner").visible());
         window.click("error-dismiss", cx);
         assert!(view.read(cx).model().error.is_none());
@@ -164,7 +279,7 @@ fn invalid_addresses_are_rejected_before_the_engine(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 async fn queue_rows_reorder_remove_and_report_failures(cx: &mut TestAppContext) {
-    let (handle, view) = open_player(cx);
+    let (handle, controls, view) = open_player(cx);
     let missing: Vec<PathBuf> = ["a.mp3", "b.mp3", "c.mp3"]
         .iter()
         .map(|name| PathBuf::from(format!("/nonexistent/mono-player-ui/{name}")))
@@ -272,7 +387,8 @@ async fn queue_rows_reorder_remove_and_report_failures(cx: &mut TestAppContext) 
             .collect();
         assert_eq!(failed, vec!["b.mp3".to_owned()]);
     });
-    cx.update_window(handle.into(), |_, window, _| {
+    cx.update_window(controls, |_, window, cx| {
+        window.render_frame(cx);
         assert!(window.find("error-banner").visible());
     })
     .unwrap();

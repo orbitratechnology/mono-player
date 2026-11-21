@@ -5,10 +5,11 @@ use std::rc::Rc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::{
-    Disableable as _, Icon, Selectable as _, h_flex, v_flex, v_virtual_list,
+use gpui_kit::component::{Disableable as _, Icon, h_flex, v_flex, v_virtual_list};
+use gpui_kit::{
+    Context, IntoElement, ParentElement as _, SharedString, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
-use gpui_kit::{Context, IntoElement, ParentElement as _, SharedString, Styled as _, Window, div};
 
 use crate::actions::{OpenFiles, PLAYER_CONTEXT};
 use crate::components::media_row::MediaRow;
@@ -24,6 +25,7 @@ impl PlayerView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let t = tokens();
+        let glass = self.glass;
         let repeat = self.playlist.repeat();
         let (repeat_icon, repeat_label) = match repeat {
             RepeatMode::One => (IconName::Repeat1, "Repeat one"),
@@ -40,12 +42,13 @@ impl PlayerView {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(Input::new(&self.url_input).h(HIT_TARGET)),
+                    .child(Input::new(&self.url_input).h(HIT_TARGET).rounded_full()),
             )
             .child(
                 Button::new("address-add")
-                    .outline()
+                    .primary()
                     .label("Add")
+                    .rounded_full()
                     .h(HIT_TARGET)
                     .px_4()
                     .on_click(cx.listener(|this, _, window, cx| this.add_address(window, cx))),
@@ -61,6 +64,7 @@ impl PlayerView {
                     .ghost()
                     .icon(Icon::new(IconName::FolderOpen))
                     .label("Add files")
+                    .rounded_full()
                     .h(HIT_TARGET)
                     .tooltip_with_action("Add files", &OpenFiles, Some(PLAYER_CONTEXT))
                     .on_click(
@@ -74,7 +78,8 @@ impl PlayerView {
                     .icon(Icon::new(repeat_icon))
                     .w(HIT_TARGET)
                     .h(HIT_TARGET)
-                    .selected(repeat != RepeatMode::Off)
+                    .rounded(px(14.))
+                    .when(repeat != RepeatMode::Off, |b| b.bg(glass.chip_active))
                     .accessibility_label(repeat_label)
                     .tooltip(repeat_label)
                     .on_click(cx.listener(|this, _, _, cx| this.cycle_repeat(cx))),
@@ -87,7 +92,8 @@ impl PlayerView {
                     .icon(Icon::new(IconName::Shuffle))
                     .w(HIT_TARGET)
                     .h(HIT_TARGET)
-                    .selected(shuffle)
+                    .rounded(px(14.))
+                    .when(shuffle, |b| b.bg(glass.chip_active))
                     .accessibility_label(label)
                     .tooltip(label)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_shuffle(cx)))
@@ -98,6 +104,7 @@ impl PlayerView {
                     .icon(Icon::new(IconName::Delete))
                     .w(HIT_TARGET)
                     .h(HIT_TARGET)
+                    .rounded(px(14.))
                     .accessibility_label("Clear queue")
                     .tooltip("Clear queue")
                     .disabled(self.playlist.is_empty())
@@ -125,53 +132,68 @@ impl PlayerView {
                 .min_h_0()
                 .child(header)
                 .child(
-                    v_virtual_list(
-                        cx.entity(),
-                        "queue-list",
-                        self.playlist_row_sizes.clone(),
-                        |view, range, _, cx| {
-                            let current = view.playlist.current_id();
-                            let len = view.playlist.len();
-                            range
-                                .filter_map(|index| {
-                                    let item = view.playlist.items().get(index)?.clone();
-                                    let id = item.id;
-                                    let entity = cx.entity().downgrade();
-                                    let activate = entity.clone();
-                                    let up = entity.clone();
-                                    let down = entity.clone();
-                                    let remove = entity;
-                                    Some(MediaRow {
-                                        id: id.0,
-                                        index,
-                                        title: item.title.into(),
-                                        is_current: current == Some(id),
-                                        failed: item.failed,
-                                        can_move_up: index > 0,
-                                        can_move_down: index + 1 < len,
-                                        on_activate: Rc::new(move |_, window, cx| {
-                                            let _ = activate.update(cx, |view, cx| {
-                                                view.play_item(id, false, window, cx)
-                                            });
-                                        }),
-                                        on_move_up: Rc::new(move |_, _, cx| {
-                                            let _ = up
-                                                .update(cx, |view, cx| view.move_item(id, -1, cx));
-                                        }),
-                                        on_move_down: Rc::new(move |_, _, cx| {
-                                            let _ = down
-                                                .update(cx, |view, cx| view.move_item(id, 1, cx));
-                                        }),
-                                        on_remove: Rc::new(move |_, _, cx| {
-                                            let _ = remove
-                                                .update(cx, |view, cx| view.remove_item(id, cx));
-                                        }),
-                                    })
-                                })
-                                .collect::<Vec<_>>()
-                        },
-                    )
-                    .flex_1(),
+                    v_flex()
+                        .flex_1()
+                        .min_h_0()
+                        .mx(EDGE)
+                        .mb(EDGE)
+                        .rounded(crate::theme::metrics::CARD_RADIUS)
+                        .bg(glass.card)
+                        .border_1()
+                        .border_color(glass.hairline)
+                        .overflow_hidden()
+                        .child(
+                            v_virtual_list(
+                                cx.entity(),
+                                "queue-list",
+                                self.playlist_row_sizes.clone(),
+                                |view, range, _, cx| {
+                                    let current = view.playlist.current_id();
+                                    let len = view.playlist.len();
+                                    range
+                                        .filter_map(|index| {
+                                            let item = view.playlist.items().get(index)?.clone();
+                                            let id = item.id;
+                                            let entity = cx.entity().downgrade();
+                                            let activate = entity.clone();
+                                            let up = entity.clone();
+                                            let down = entity.clone();
+                                            let remove = entity;
+                                            Some(MediaRow {
+                                                id: id.0,
+                                                index,
+                                                title: item.title.into(),
+                                                is_current: current == Some(id),
+                                                failed: item.failed,
+                                                can_move_up: index > 0,
+                                                can_move_down: index + 1 < len,
+                                                on_activate: Rc::new(move |_, window, cx| {
+                                                    let _ = activate.update(cx, |view, cx| {
+                                                        view.play_item(id, false, window, cx)
+                                                    });
+                                                }),
+                                                on_move_up: Rc::new(move |_, _, cx| {
+                                                    let _ = up.update(cx, |view, cx| {
+                                                        view.move_item(id, -1, cx)
+                                                    });
+                                                }),
+                                                on_move_down: Rc::new(move |_, _, cx| {
+                                                    let _ = down.update(cx, |view, cx| {
+                                                        view.move_item(id, 1, cx)
+                                                    });
+                                                }),
+                                                on_remove: Rc::new(move |_, _, cx| {
+                                                    let _ = remove.update(cx, |view, cx| {
+                                                        view.remove_item(id, cx)
+                                                    });
+                                                }),
+                                            })
+                                        })
+                                        .collect::<Vec<_>>()
+                                },
+                            )
+                            .flex_1(),
+                        ),
                 )
                 .into_any_element()
         };

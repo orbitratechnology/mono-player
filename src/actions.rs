@@ -27,6 +27,11 @@ actions!(
         ShowSettings,
         SpeedUp,
         SpeedDown,
+        ShowEffects,
+        TakeSnapshot,
+        NextFrame,
+        NextChapter,
+        PreviousChapter,
         Quit,
     ]
 );
@@ -141,6 +146,29 @@ pub const SHORTCUTS: &[Shortcut] = &[
         "T",
         "Audio, subtitles & speed",
         ShowTracks,
+        PLAYER_ONLY
+    ),
+    shortcut!(
+        "secondary-e",
+        "Ctrl/Cmd+E",
+        "Equalizer & picture",
+        ShowEffects,
+        PLAYER_CONTEXT
+    ),
+    shortcut!("shift-s", "Shift+S", "Snapshot", TakeSnapshot, PLAYER_ONLY),
+    shortcut!("e", "E", "Next frame", NextFrame, PLAYER_ONLY),
+    shortcut!(
+        "shift-n",
+        "Shift+N",
+        "Next chapter",
+        NextChapter,
+        PLAYER_ONLY
+    ),
+    shortcut!(
+        "shift-p",
+        "Shift+P",
+        "Previous chapter",
+        PreviousChapter,
         PLAYER_ONLY
     ),
     shortcut!("]", "]", "Faster", SpeedUp, PLAYER_ONLY),

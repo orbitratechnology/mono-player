@@ -34,6 +34,60 @@ pub fn seek_offset_ms(forward: bool, large: bool) -> i64 {
     if forward { ms } else { -ms }
 }
 
+/// The side panels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Panel {
+    Queue,
+    Tracks,
+    Effects,
+    Settings,
+}
+
+impl Panel {
+    pub const ALL: [Self; 4] = [Self::Queue, Self::Tracks, Self::Effects, Self::Settings];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Queue => "Queue",
+            Self::Tracks => "Tracks",
+            Self::Effects => "Effects",
+            Self::Settings => "Settings",
+        }
+    }
+}
+
+/// Everything the user can ask the player to do, from a key binding or from the floating
+/// controls (which live in their own window and call `PlayerView::perform`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UiCommand {
+    TogglePlayback,
+    Stop,
+    Previous,
+    Next,
+    Seek {
+        forward: bool,
+        large: bool,
+    },
+    VolumeUp,
+    VolumeDown,
+    ToggleMute,
+    SpeedUp,
+    SpeedDown,
+    TogglePanel(Panel),
+    ClosePanel,
+    ToggleFullscreen,
+    ExitFullscreen,
+    OpenFiles,
+    NextChapter,
+    PreviousChapter,
+    NextFrame,
+    Snapshot,
+    DismissError,
+    Quit,
+    /// Pointer or keyboard activity: reveal the controls.
+    Activity,
+}
+
 /// "Previous" restarts the current item when more than this far into it.
 pub const RESTART_THRESHOLD_MS: i64 = 3_000;
 

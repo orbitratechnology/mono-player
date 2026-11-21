@@ -5,14 +5,16 @@ use gpui_kit::component::h_flex;
 use gpui_kit::component::slider::{Slider, SliderState};
 use gpui_kit::{App, Entity, IntoElement, ParentElement as _, RenderOnce, Styled as _, Window};
 
-use super::action_button;
+use super::{CommandHandler, command_button};
 use crate::actions::ToggleMute;
+use crate::features::player::commands::UiCommand;
 use crate::theme::metrics::{HIT_TARGET, VOLUME_WIDTH};
 
 #[derive(IntoElement)]
 pub struct VolumeControl {
     pub slider: Entity<SliderState>,
     pub muted: bool,
+    pub on_command: CommandHandler,
 }
 
 impl RenderOnce for VolumeControl {
@@ -27,7 +29,14 @@ impl RenderOnce for VolumeControl {
             .items_center()
             .gap_1()
             .flex_shrink_0()
-            .child(action_button("volume-mute", icon, label, &ToggleMute))
+            .child(command_button(
+                "volume-mute",
+                icon,
+                label,
+                &ToggleMute,
+                UiCommand::ToggleMute,
+                &self.on_command,
+            ))
             .child(
                 h_flex()
                     .w(VOLUME_WIDTH)

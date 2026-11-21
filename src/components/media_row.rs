@@ -35,6 +35,7 @@ pub struct MediaRow {
 impl RenderOnce for MediaRow {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let t = tokens();
+        let glass = crate::theme::Glass::new(true);
         let row_id = ElementId::NamedInteger("media-row".into(), self.id);
         let activate = self.on_activate.clone();
         let (up, down, remove) = (self.on_move_up, self.on_move_down, self.on_remove);
@@ -110,14 +111,9 @@ impl RenderOnce for MediaRow {
             .pr_1()
             .gap_1()
             .items_center()
-            .border_l_2()
-            .border_color(if self.is_current {
-                t.foreground
-            } else {
-                t.background
-            })
-            .when(self.is_current, |row| row.bg(t.surface_active))
-            .hover(|row| row.bg(t.surface_hover))
+            // Current: play icon + bold title + a soft fill (never color alone).
+            .when(self.is_current, |row| row.bg(glass.chip_active))
+            .hover(|row| row.bg(glass.chip))
             .child(play)
             .child(
                 icon_button(

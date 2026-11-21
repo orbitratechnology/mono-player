@@ -10,7 +10,8 @@ use gpui_kit::{
 
 use crate::components::AppIcons;
 use crate::diagnostics as log;
-use crate::features::player::view::PlayerView;
+use crate::features::player::overlay::open_controls;
+use crate::features::player::view::{PlayerView, window_background};
 use crate::persistence::settings::{self, Settings};
 use crate::{actions, theme};
 
@@ -62,14 +63,21 @@ pub fn run(initial_paths: Vec<PathBuf>) {
                 ..Default::default()
             }),
             app_id: Some("mono-player".into()),
-            window_min_size: Some(size(px(640.), px(400.))),
+            window_min_size: Some(size(px(640.), px(420.))),
+            window_background: window_background(settings.translucent()),
             ..Default::default()
         };
         let opened = gpui_kit::open_window(options, cx, move |window, cx| {
             cx.new(|cx| PlayerView::new(settings, settings_path, initial_paths, window, cx))
         });
         match opened {
-            Ok(_) => cx.activate(true),
+            Ok((main, player)) => {
+                // The floating controls live in their own window over the video.
+                if let Err(error) = open_controls(main, player, cx) {
+                    log::warn(&format!("could not open the controls window: {error}"));
+                }
+                cx.activate(true);
+            }
             Err(error) => {
                 log::warn(&format!("could not open the main window: {error}"));
                 cx.quit();

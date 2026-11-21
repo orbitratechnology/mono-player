@@ -29,7 +29,7 @@ serde_json = "1"
 raw-window-handle = "0.6"
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-x11rb = "0.13"
+x11rb = { version = "0.13", features = ["shape"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [

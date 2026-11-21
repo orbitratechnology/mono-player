@@ -20,6 +20,16 @@ mod platform;
 #[path = "windows.rs"]
 mod platform;
 
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[path = "overlay_linux.rs"]
+mod overlay_platform;
+#[cfg(target_os = "macos")]
+#[path = "overlay_macos.rs"]
+mod overlay_platform;
+#[cfg(target_os = "windows")]
+#[path = "overlay_windows.rs"]
+mod overlay_platform;
+
 pub use types::{Frame, VideoTarget};
 
 #[cfg(any(
@@ -98,6 +108,59 @@ mod surface {
     target_os = "windows"
 ))]
 pub use surface::VideoSurface;
+
+/// Pins the floating controls window over a rectangle of the player window.
+///
+/// The controls are a separate GPUI window (GPUI cannot draw over the native video surface);
+/// this ties it to the player window natively: an X11 child window, an AppKit child window, or
+/// a Win32 owned window. See the platform files for details.
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos",
+    target_os = "windows"
+))]
+pub struct OverlayHost {
+    host: overlay_platform::Host,
+    frame: Option<(Frame, f32)>,
+    visible: Option<bool>,
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos",
+    target_os = "windows"
+))]
+impl OverlayHost {
+    pub fn attach(
+        main: raw_window_handle::RawWindowHandle,
+        overlay: raw_window_handle::RawWindowHandle,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            host: overlay_platform::Host::attach(main, overlay)?,
+            frame: None,
+            visible: None,
+        })
+    }
+
+    /// Place the controls; `frame` is in the player window's client coordinates. No-op when
+    /// unchanged.
+    pub fn set_frame(&mut self, frame: Frame, corner_radius: f32) {
+        if self.frame != Some((frame, corner_radius)) {
+            self.frame = Some((frame, corner_radius));
+            self.host.set_frame(frame, corner_radius);
+        }
+    }
+
+    pub fn set_visible(&mut self, visible: bool) {
+        let visible = visible && self.frame.is_some();
+        if self.visible != Some(visible) {
+            self.visible = Some(visible);
+            self.host.set_visible(visible);
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

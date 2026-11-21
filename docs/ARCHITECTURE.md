@@ -27,12 +27,12 @@ video goes straight into a native surface; the UI reacts to engine events rather
 | `src/actions.rs` | Actions and the single shortcut table used for key bindings and help |
 | `src/theme.rs` | Monochrome tokens, metrics (44/48 px targets), GPUI Kit theme mapping |
 | `src/components/` | Stateless `RenderOnce` controls: transport, timeline, volume, queue row |
-| `src/features/player/` | `PlayerView` (root view), `PlayerModel` (event reducer), `PlaybackController` (actor handle, request ids, respawn), `commands` (pure input mapping) |
+| `src/features/player/` | `PlayerView` (root view, `perform`), `ControlsOverlay` (floating controls window), Tracks and Effects panels, `PlayerModel` (event reducer), `PlaybackController` (actor handle, request ids, respawn), `commands` (`UiCommand`, `Panel`, input mapping) |
 | `src/features/playlist/` | `Playlist` model (stable ids, repeat, shuffle) and the queue panel |
 | `src/features/settings/` | Preference toggles and the settings panel |
 | `src/playback/` | Protocol (`Command`/`Event`), state helpers, typed errors, the actor |
 | `src/playback/vlc_adapter/` | The only code touching `vlc-rs` or raw LibVLC symbols |
-| `src/video_output/` | Native child surface per platform behind one `VideoSurface` API |
+| `src/video_output/` | Native video surface (`VideoSurface`) and controls-window placement (`OverlayHost`) per platform |
 | `src/persistence/` | Versioned settings file with migration and atomic writes |
 
 ## Threading and ownership
@@ -66,34 +66,75 @@ No timers run while idle: the actor blocks on its queue (it uses a 150 ms timeou
 track-list refresh is pending), the UI has no polling loop, and the fullscreen auto-hide timer
 exists only during fullscreen video playback after user activity.
 
-## Video surface and layout
+## Video surface, floating controls and layout
 
 GPUI renders its UI on the GPU; LibVLC renders into a native child surface positioned over the
-video rectangle. GPUI cannot draw over a native child, so the layout never overlays GPUI
-content on the video: the control bar, error banner and side panel sit beside or below the video
-rectangle, which shrinks to make room (also in fullscreen when the controls are revealed). The
+video rectangle. GPUI cannot draw over a native child, so the transport controls are **a second
+GPUI window** — a borderless `PopUp` — that `video_output::OverlayHost` pins over the bottom of
+the video (`overlay::pill_frame`: bottom-centre, 20 px margin, at most 760 px wide):
+
+- **X11** — the controls window is reparented into the player window (the XEmbed technique),
+  made override-redirect and stacked above the video. It moves, minimizes and stacks with the
+  player without window-manager involvement. X does not alpha-blend sibling windows, so the
+  pill is opaque and its rounded corners are cut with the Shape extension.
+- **macOS** — the controls become a borderless, non-activating child panel at normal window
+  level (`addChildWindow:ordered:`). Child windows follow the player (also into native
+  fullscreen) and are composited, so the pill is translucent.
+- **Windows** — the controls become an owned, non-topmost popup positioned from the owner's
+  client area; DWM composites it, so the pill is translucent.
+
+The controls window renders `overlay::ControlsOverlay`, which reads the `PlayerView` entity
+and observes it for changes. Buttons and the keys pressed while the pill has focus become
+`UiCommand`s that run in the player window (`PlayerView::perform`), the single entry point
+shared with the key bindings. Sliders are entities owned by the player, so dragging the
+timeline or volume in the pill updates the same state.
+
+Visibility: the pill is shown while there is anything to control, hides after 2.5 s of
+untouched video playback, never hides while hovered, paused, stopped or playing audio, and
+returns on pointer movement over the video (the X11 InputOnly window forwards it), on the pill,
+or on any command. The countdown exists only during video playback; nothing runs when idle.
+
+The player window holds only the video area and an optional floating side panel (Queue, Tracks,
+Effects, Settings) with a margin around it; the video rectangle shrinks beside the panel. The
 surface is hidden whenever there is nothing to show (no media, opening, audio-only, error), and
-GPUI paints the empty state, spinner or now-playing card in that area instead.
+GPUI paints the empty state, spinner, or now-playing card (artwork, title, artist — album) in
+that area. With a translucent window the empty area shows the blurred desktop.
 
-The video rectangle comes from a `canvas` element's prepaint; `VideoSurface::set_bounds` is a
-no-op unless the rectangle changed, and the X11 implementation sends fire-and-forget requests,
-so resizing never waits on the display server.
+The video rectangle comes from a `canvas` element's prepaint; `VideoSurface::set_bounds` and
+`OverlayHost::set_frame` are no-ops unless the rectangle changed, and the X11 implementations
+send fire-and-forget requests, so resizing never waits on the display server.
 
-Platform specifics live in `src/video_output/{linux,windows,macos}.rs`:
+Platform specifics for the video surface live in `src/video_output/{linux,windows,macos}.rs`
+and for the controls in `src/video_output/overlay_{linux,windows,macos}.rs`. Pointer input over
+the video:
 
 - **X11** — a black `InputOutput` child for LibVLC plus an `InputOnly` sibling stacked above
   it. LibVLC's X11 embedding always selects `PointerMotion` on its drawable, and X stops
   propagating an event at the first window where a client selected it; the input-only sibling
-  selects nothing, so pointer events reach the GPUI window (needed to reveal fullscreen
-  controls). On Wayland sessions the app requests GPUI's X11 backend (XWayland).
+  selects nothing, so pointer events reach the GPUI window. On Wayland sessions the app
+  requests GPUI's X11 backend (XWayland).
 - **Windows** — a child `HWND` whose window procedure answers `WM_NCHITTEST` with
   `HTTRANSPARENT` and forwards stray mouse messages to the parent.
 - **macOS** — an `NSView` subclass whose `hitTest:` returns nil, making it and LibVLC's subview
   transparent to the mouse.
 
-Lifetime: the surface is destroyed only after the actor has released the player. Closing the
-window or pressing Ctrl/Cmd+Q hides the surface, asks the actor to shut down, waits for its
-completion signal (bounded at 3 s), saves settings on the background executor, then quits.
+Lifetime: closing the window or Ctrl/Cmd+Q hides the surfaces, closes the controls window,
+asks the actor to shut down, waits for its completion signal (bounded at 3 s), saves settings
+on the background executor, then quits. The video surface is destroyed only after LibVLC has
+released the player.
+
+## Engine features
+
+`playback::features` holds engine-independent descriptions of the equalizer, picture
+adjustments, aspect/crop/zoom tables, deinterlace modes, stereo modes, audio devices, media
+metadata, titles/chapters and per-media decoding options. The adapter maps them onto LibVLC
+(using `vlc-rs` where it has an API and reviewed `sys`/`extern "C"` calls where it does not,
+e.g. LibVLC 3.0's full title/chapter descriptions and `libvlc_audio_output_device_get`). The
+actor re-applies picture settings to every new video output (`Vout` event), audio settings
+once an item's audio output exists, and the equalizer at the player level. Media options
+(`:network-caching`, `:avcodec-hw`, `:no-videotoolbox`, `:start-time`) are added per item.
+Metadata changes arrive on the media's own event manager, so stream "now playing" titles update
+live.
 
 ## Errors
 
