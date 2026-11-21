@@ -2,6 +2,7 @@
 
 mod actor;
 pub mod error;
+pub mod features;
 pub mod protocol;
 pub mod state;
 pub mod vlc_adapter;

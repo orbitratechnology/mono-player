@@ -32,6 +32,8 @@ pub enum PlaybackError {
     SeekUnsupported,
     SubtitleLoadFailed(PathBuf),
     TrackUnavailable,
+    /// A snapshot could not be taken (no video, or the folder is not writable).
+    SnapshotFailed,
     /// The native video surface could not be created or attached.
     VideoSurfaceUnavailable(String),
     /// The playback thread stopped unexpectedly.
@@ -55,6 +57,7 @@ impl PlaybackError {
             Self::SeekUnsupported => "Seeking unavailable",
             Self::SubtitleLoadFailed(_) => "Subtitle not loaded",
             Self::TrackUnavailable => "Track unavailable",
+            Self::SnapshotFailed => "Snapshot not saved",
             Self::VideoSurfaceUnavailable(_) => "Video output unavailable",
             Self::PlaybackThreadFailed => "Playback stopped",
         }
@@ -103,6 +106,9 @@ impl PlaybackError {
                 display_name(path)
             ),
             Self::TrackUnavailable => "That track couldn't be selected. Playback continues.".into(),
+            Self::SnapshotFailed => {
+                "A snapshot needs a video frame on screen and a writable Pictures folder.".into()
+            }
             Self::VideoSurfaceUnavailable(reason) => {
                 format!("Video can't be shown in this window ({reason}). Audio still plays.")
             }
@@ -119,6 +125,7 @@ impl PlaybackError {
             Self::SeekUnsupported
                 | Self::SubtitleLoadFailed(_)
                 | Self::TrackUnavailable
+                | Self::SnapshotFailed
                 | Self::VideoSurfaceUnavailable(_)
         )
     }

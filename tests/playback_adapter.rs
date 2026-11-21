@@ -391,3 +391,75 @@ fn shutdown_while_playing_and_when_idle() {
     player.state(request, PlaybackState::Playing);
     player.shutdown();
 }
+
+#[test]
+fn engine_features_reach_libvlc() {
+    use mono_player::playback::features::{EqualizerSettings, StereoMode, VideoAdjust};
+
+    if skip() {
+        return;
+    }
+    let fixture = Fixture::new("features");
+    let wav = fixture.wav(4);
+    let mut player = Harness::new();
+    let request = player.open(&wav);
+    let events = player.state(request, PlaybackState::Playing);
+
+    // The equalizer's bands and presets come straight from LibVLC.
+    let info = events
+        .iter()
+        .find_map(|e| match e {
+            Event::EqualizerInfo(info) => Some(info.clone()),
+            _ => None,
+        })
+        .expect("equalizer info after LibVLC starts");
+    assert_eq!(info.frequencies.len(), 10);
+    assert!(info.presets.len() >= 10, "{} presets", info.presets.len());
+    assert!(info.presets.iter().any(|p| p.name == "Rock"));
+
+    // Metadata and navigation are reported for the playing item.
+    player.until(
+        "metadata",
+        |e| matches!(e, Event::MetaChanged { request: r, .. } if *r == request),
+    );
+    player.until(
+        "navigation",
+        |e| matches!(e, Event::NavigationChanged { request: r, .. } if *r == request),
+    );
+
+    let mut eq = EqualizerSettings::default();
+    eq.apply_preset(1, &info.presets[1]);
+    player.send(Command::SetEqualizer(Some(eq)));
+    player.send(Command::SetStereoMode(StereoMode::Reverse));
+    player.send(Command::SetVideoAdjust(VideoAdjust {
+        brightness: 1.2,
+        ..Default::default()
+    }));
+    player.send(Command::SetAspectRatio(Some("16:9".into())));
+    player.send(Command::SetCrop(Some("4:3".into())));
+    player.send(Command::SetZoom(2.0));
+    player.send(Command::SetDeinterlace(Some("yadif".into())));
+    player.send(Command::StepChapter(1));
+    player.send(Command::RefreshAudioDevices);
+    player.until("audio devices", |e| {
+        matches!(e, Event::AudioDevicesChanged { .. })
+    });
+
+    // Audio-only media has no frame to snapshot: a recoverable, typed error.
+    player.send(Command::TakeSnapshot(fixture.dir.join("shots")));
+    let error = player.error();
+    assert_eq!(error, PlaybackError::SnapshotFailed);
+    assert!(!error.ends_item());
+
+    // Hardware decoding and caching options apply to the next item without disturbing this one.
+    player.send(Command::SetPlaybackOptions(
+        mono_player::playback::features::PlaybackOptions {
+            hardware_decoding: false,
+            network_caching_ms: 3000,
+        },
+    ));
+    player.send(Command::SetEqualizer(None));
+    let next = player.open(&wav);
+    player.state(next, PlaybackState::Playing);
+    player.shutdown();
+}

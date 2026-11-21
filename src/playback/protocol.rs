@@ -4,6 +4,10 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use super::error::{PlaybackError, display_name};
+use super::features::{
+    AudioDevice, EqualizerInfo, EqualizerSettings, MediaMeta, Navigation, PlaybackOptions,
+    StereoMode, VideoAdjust,
+};
 use super::state::{PlaybackState, Tracks};
 use crate::video_output::VideoTarget;
 
@@ -213,6 +217,32 @@ pub enum Command {
     SetSubtitleDelay(i64),
     /// Attach (or detach with `None`) the native drawable LibVLC renders into.
     SetVideoTarget(Option<VideoTarget>),
+    SelectVideoTrack(i32),
+    /// Audio equalizer; `None` (or disabled settings) bypasses it.
+    SetEqualizer(Option<EqualizerSettings>),
+    SetVideoAdjust(VideoAdjust),
+    /// e.g. `"16:9"`; `None` follows the source.
+    SetAspectRatio(Option<String>),
+    /// Crop geometry, e.g. `"16:9"`; `None` disables cropping.
+    SetCrop(Option<String>),
+    /// 0 fits the window.
+    SetZoom(f32),
+    /// Deinterlace mode, e.g. `"yadif"`; `None` disables it.
+    SetDeinterlace(Option<String>),
+    SetStereoMode(StereoMode),
+    /// Output device id; `None` is the system default.
+    SetAudioDevice(Option<String>),
+    RefreshAudioDevices,
+    /// Save the current frame into this folder.
+    TakeSnapshot(PathBuf),
+    SetTitle(i32),
+    SetChapter(i32),
+    /// Move to the next (+1) or previous (−1) chapter.
+    StepChapter(i32),
+    /// Advance a single frame (pauses).
+    NextFrame,
+    /// Decoding options applied to items opened from now on.
+    SetPlaybackOptions(PlaybackOptions),
 }
 
 /// Events from the playback actor to the UI.
@@ -272,6 +302,23 @@ pub enum Event {
     },
     EndReached {
         request: RequestId,
+    },
+    /// The equalizer's bands and built-in presets (sent once LibVLC is running).
+    EqualizerInfo(EqualizerInfo),
+    NavigationChanged {
+        request: RequestId,
+        navigation: Navigation,
+    },
+    MetaChanged {
+        request: RequestId,
+        meta: MediaMeta,
+    },
+    AudioDevicesChanged {
+        devices: Vec<AudioDevice>,
+        current: Option<String>,
+    },
+    SnapshotSaved {
+        path: PathBuf,
     },
     /// `request` is `None` for errors not tied to a media item (runtime start, shutdown).
     Error {

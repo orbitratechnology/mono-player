@@ -5,7 +5,7 @@
 //! normalize the event and hand it to a non-blocking sink. They never touch GPUI, never block,
 //! and never unwind across the FFI boundary.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{CStr, c_int, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -24,13 +24,20 @@ const END_REACHED: c_int = 0x109;
 const ENCOUNTERED_ERROR: c_int = 0x10A;
 const TIME_CHANGED: c_int = 0x10B;
 const SEEKABLE_CHANGED: c_int = 0x10D;
+const TITLE_CHANGED: c_int = 0x10F;
+const SNAPSHOT_TAKEN: c_int = 0x110;
 const LENGTH_CHANGED: c_int = 0x111;
 const VOUT: c_int = 0x112;
 const ES_ADDED: c_int = 0x114;
 const ES_DELETED: c_int = 0x115;
 const ES_SELECTED: c_int = 0x116;
+const AUDIO_DEVICE: c_int = 0x11C;
+const CHAPTER_CHANGED: c_int = 0x11D;
+// Media (not player) event.
+const MEDIA_META_CHANGED: c_int = 0x000;
 
-const SUBSCRIBED: &[c_int] = &[
+/// Events subscribed on the media player's event manager.
+pub const PLAYER_EVENTS: &[c_int] = &[
     OPENING,
     BUFFERING,
     PLAYING,
@@ -45,7 +52,14 @@ const SUBSCRIBED: &[c_int] = &[
     ES_ADDED,
     ES_DELETED,
     ES_SELECTED,
+    TITLE_CHANGED,
+    SNAPSHOT_TAKEN,
+    AUDIO_DEVICE,
+    CHAPTER_CHANGED,
 ];
+
+/// Events subscribed on the media's event manager.
+pub const MEDIA_EVENTS: &[c_int] = &[MEDIA_META_CHANGED];
 
 /// Minimum spacing of forwarded `TimeChanged` events. The actor applies the user-facing cadence;
 /// this only bounds how much work reaches its queue.
@@ -62,7 +76,7 @@ unsafe extern "C" {
 }
 
 /// A normalized LibVLC media-player event.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum EngineEvent {
     Opening,
     Buffering(f32),
@@ -78,10 +92,18 @@ pub enum EngineEvent {
     Vout(i32),
     /// An elementary stream was added, removed or selected.
     TracksChanged,
+    /// The current title or chapter changed (DVD/Blu-ray titles, chapter marks).
+    NavigationChanged,
+    /// A snapshot was written to this file.
+    SnapshotTaken(String),
+    /// The audio output device changed.
+    AudioDeviceChanged,
+    /// Title/artist/now-playing/artwork metadata changed.
+    MetaChanged,
 }
 
 /// Where callbacks deliver events. Must be cheap and non-blocking.
-pub type EngineSink = Box<dyn Fn(EngineEvent) + Send + Sync + 'static>;
+pub type EngineSink = std::sync::Arc<dyn Fn(EngineEvent) + Send + Sync + 'static>;
 
 struct CallbackContext {
     sink: EngineSink,
@@ -89,8 +111,8 @@ struct CallbackContext {
     last_time_event_ms: AtomicU64,
 }
 
-/// Keeps callbacks attached to one media player's event manager. Dropping it detaches every
-/// callback *before* freeing the context they reference.
+/// Keeps callbacks attached to one LibVLC event manager. Dropping it detaches every callback
+/// *before* freeing the context they reference.
 pub struct EventSubscription {
     manager: *mut sys::libvlc_event_manager_t,
     context: *mut CallbackContext,
@@ -98,19 +120,23 @@ pub struct EventSubscription {
 }
 
 impl EventSubscription {
-    /// Attach all player callbacks.
+    /// Attach callbacks for `events` ([`PLAYER_EVENTS`] or [`MEDIA_EVENTS`]).
     ///
     /// # Safety
-    /// `manager` must be the event manager of a live `libvlc_media_player_t` that outlives the
-    /// returned subscription (drop the subscription before releasing the player).
-    pub unsafe fn attach(manager: *mut sys::libvlc_event_manager_t, sink: EngineSink) -> Self {
+    /// `manager` must be the event manager of a live LibVLC object (player or media) that
+    /// outlives the returned subscription (drop the subscription before releasing the object).
+    pub unsafe fn attach(
+        manager: *mut sys::libvlc_event_manager_t,
+        events: &[c_int],
+        sink: EngineSink,
+    ) -> Self {
         let context = Box::into_raw(Box::new(CallbackContext {
             sink,
             epoch: Instant::now(),
             last_time_event_ms: AtomicU64::new(0),
         }));
-        let mut attached = Vec::with_capacity(SUBSCRIBED.len());
-        for &event_type in SUBSCRIBED {
+        let mut attached = Vec::with_capacity(events.len());
+        for &event_type in events {
             // SAFETY: `manager` is live per the caller's contract; `context` stays valid until
             // `Drop` detaches this exact (type, callback, context) triple.
             let result = unsafe {
@@ -194,6 +220,20 @@ fn normalize(event: &sys::libvlc_event_t, context: &CallbackContext) -> Option<E
         }
         VOUT => EngineEvent::Vout(unsafe { event.u.media_player_vout.new_count }),
         ES_ADDED | ES_DELETED | ES_SELECTED => EngineEvent::TracksChanged,
+        TITLE_CHANGED | CHAPTER_CHANGED => EngineEvent::NavigationChanged,
+        SNAPSHOT_TAKEN => {
+            let name = unsafe { event.u.media_player_snapshot_taken.psz_filename };
+            if name.is_null() {
+                return None;
+            }
+            // SAFETY: non-null, NUL-terminated, valid for the callback's duration.
+            let name = unsafe { CStr::from_ptr(name) }
+                .to_string_lossy()
+                .into_owned();
+            EngineEvent::SnapshotTaken(name)
+        }
+        AUDIO_DEVICE => EngineEvent::AudioDeviceChanged,
+        MEDIA_META_CHANGED => EngineEvent::MetaChanged,
         _ => return None,
     })
 }

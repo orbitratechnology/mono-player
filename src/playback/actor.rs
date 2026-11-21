@@ -15,6 +15,7 @@ use futures::channel::mpsc::UnboundedSender;
 use futures::channel::oneshot;
 
 use super::error::PlaybackError;
+use super::features::{EqualizerSettings, PlaybackOptions, StereoMode, VideoAdjust};
 use super::protocol::{Command, Event, MediaSource, RequestId};
 use super::state::{
     MAX_VOLUME, PROGRESS_INTERVAL, PlaybackState, Throttle, clamp_delay, clamp_seek, clamp_volume,
@@ -134,6 +135,31 @@ struct Actor {
     tracks_dirty: bool,
     audio_delay_ms: i64,
     subtitle_delay_ms: i64,
+    picture: Picture,
+    equalizer: Option<EqualizerSettings>,
+    stereo_mode: StereoMode,
+    audio_device: Option<String>,
+    options: PlaybackOptions,
+}
+
+/// Video settings that apply to every new video output.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Picture {
+    adjust: VideoAdjust,
+    aspect_ratio: Option<String>,
+    crop: Option<String>,
+    zoom: f32,
+    deinterlace: Option<String>,
+}
+
+impl Picture {
+    fn apply(&self, player: &Player) {
+        player.set_video_adjust(&self.adjust);
+        player.set_aspect_ratio(self.aspect_ratio.as_deref());
+        player.set_crop(self.crop.as_deref());
+        player.set_zoom(self.zoom);
+        player.set_deinterlace(self.deinterlace.as_deref());
+    }
 }
 
 impl Actor {
@@ -157,6 +183,11 @@ impl Actor {
             tracks_dirty: false,
             audio_delay_ms: 0,
             subtitle_delay_ms: 0,
+            picture: Picture::default(),
+            equalizer: None,
+            stereo_mode: StereoMode::Stereo,
+            audio_device: None,
+            options: PlaybackOptions::default(),
         }
     }
 
@@ -245,6 +276,7 @@ impl Actor {
                         started.elapsed()
                     ));
                     self.emit(Event::RuntimeReady { version });
+                    self.emit(Event::EqualizerInfo(Player::equalizer_info()));
                     self.runtime = Some(runtime);
                 }
                 Err(error) => {
@@ -257,7 +289,9 @@ impl Actor {
         match Player::new(runtime) {
             Ok(player) => {
                 player.set_video_target(self.video_target);
+                player.set_equalizer(self.equalizer.as_ref());
                 self.player = Some(player);
+                self.emit_audio_devices();
                 true
             }
             Err(error) => {
@@ -370,6 +404,134 @@ impl Actor {
                     player.set_video_target(target);
                 }
             }
+            Command::SelectVideoTrack(id) => {
+                let ok = self
+                    .player
+                    .as_ref()
+                    .is_some_and(|p| self.state.has_media() && p.select_video_track(id));
+                if !ok {
+                    self.fail(self.current_request(), PlaybackError::TrackUnavailable);
+                }
+                self.flush_tracks();
+            }
+            Command::SetEqualizer(settings) => {
+                self.equalizer = settings;
+                if let Some(player) = &self.player {
+                    player.set_equalizer(self.equalizer.as_ref());
+                }
+            }
+            Command::SetVideoAdjust(adjust) => {
+                self.picture.adjust = adjust.clamped();
+                self.apply_picture();
+            }
+            Command::SetAspectRatio(ratio) => {
+                self.picture.aspect_ratio = ratio;
+                self.apply_picture();
+            }
+            Command::SetCrop(crop) => {
+                self.picture.crop = crop;
+                self.apply_picture();
+            }
+            Command::SetZoom(zoom) => {
+                self.picture.zoom = if zoom.is_finite() {
+                    zoom.clamp(0.0, 8.0)
+                } else {
+                    0.0
+                };
+                self.apply_picture();
+            }
+            Command::SetDeinterlace(mode) => {
+                self.picture.deinterlace = mode;
+                self.apply_picture();
+            }
+            Command::SetStereoMode(mode) => {
+                self.stereo_mode = mode;
+                if let Some(player) = &self.player {
+                    player.set_stereo_mode(mode);
+                }
+            }
+            Command::SetAudioDevice(id) => {
+                self.audio_device = id;
+                if let Some(player) = &self.player {
+                    player.set_audio_device(self.audio_device.as_deref());
+                }
+                self.emit_audio_devices();
+            }
+            Command::RefreshAudioDevices => self.emit_audio_devices(),
+            Command::TakeSnapshot(dir) => {
+                let has_video = self.player.as_ref().is_some_and(Player::has_video);
+                let ok = has_video
+                    && std::fs::create_dir_all(&dir).is_ok()
+                    && self.player.as_ref().is_some_and(|p| p.take_snapshot(&dir));
+                if !ok {
+                    self.fail(self.current_request(), PlaybackError::SnapshotFailed);
+                }
+            }
+            Command::SetTitle(index) => {
+                if let Some(player) = self.player.as_ref().filter(|_| self.state.has_media()) {
+                    player.set_title(index);
+                }
+            }
+            Command::SetChapter(index) => {
+                if let Some(player) = self.player.as_ref().filter(|_| self.state.has_media()) {
+                    player.set_chapter(index);
+                }
+            }
+            Command::StepChapter(delta) => self.step_chapter(delta),
+            Command::NextFrame => {
+                if let Some(player) = self.player.as_ref().filter(|_| self.state.has_media()) {
+                    player.next_frame();
+                }
+            }
+            Command::SetPlaybackOptions(options) => self.options = options,
+        }
+    }
+
+    fn apply_picture(&self) {
+        if let Some(player) = &self.player {
+            self.picture.apply(player);
+        }
+    }
+
+    fn step_chapter(&mut self, delta: i32) {
+        let Some(player) = self.player.as_ref().filter(|_| self.state.has_media()) else {
+            return;
+        };
+        let navigation = player.navigation();
+        let Some(current) = navigation
+            .current_chapter
+            .or_else(|| navigation.chapter_at(self.time_ms).map(|c| c.index))
+        else {
+            return;
+        };
+        let target = current + delta;
+        if (0..navigation.chapters.len() as i32).contains(&target) {
+            player.set_chapter(target);
+        }
+    }
+
+    fn emit_audio_devices(&self) {
+        if let Some(player) = &self.player {
+            let (devices, current) = player.audio_devices();
+            self.emit(Event::AudioDevicesChanged { devices, current });
+        }
+    }
+
+    fn emit_meta(&self) {
+        if let (Some(player), Some(request)) = (&self.player, self.current_request()) {
+            self.emit(Event::MetaChanged {
+                request,
+                meta: player.meta(),
+            });
+        }
+    }
+
+    fn emit_navigation(&self) {
+        if let (Some(player), Some(request)) = (&self.player, self.current_request()) {
+            self.emit(Event::NavigationChanged {
+                request,
+                navigation: player.navigation(),
+            });
         }
     }
 
@@ -410,13 +572,14 @@ impl Actor {
             return;
         }
         let tx = self.tx.clone();
-        let sink = Box::new(move |event| {
+        let sink: super::vlc_adapter::EngineSink = std::sync::Arc::new(move |event| {
             // Non-blocking; fails only if the actor is gone, which is fine to ignore.
             let _ = tx.send(Message::Engine(request, event));
         });
         let runtime = self.runtime.as_ref().expect("player implies runtime");
         let player = self.player.as_mut().expect("ensured above");
-        if let Err(error) = player.load(runtime, &source, start_ms, sink) {
+        let options = self.options.media_options();
+        if let Err(error) = player.load(runtime, &source, start_ms, &options, sink) {
             return self.fail(Some(request), error);
         }
         player.set_video_target(self.video_target);
@@ -584,11 +747,23 @@ impl Actor {
                     self.emit(Event::SeekableChanged { request, seekable });
                 }
             }
-            EngineEvent::Vout(count) => self.emit(Event::VideoOutputChanged {
-                request,
-                has_video: count > 0,
-            }),
+            EngineEvent::Vout(count) => {
+                if count > 0 {
+                    // A new video output starts with default settings; re-apply ours.
+                    self.apply_picture();
+                }
+                self.emit(Event::VideoOutputChanged {
+                    request,
+                    has_video: count > 0,
+                });
+            }
             EngineEvent::TracksChanged => self.tracks_dirty = true,
+            EngineEvent::NavigationChanged => self.emit_navigation(),
+            EngineEvent::SnapshotTaken(path) => self.emit(Event::SnapshotSaved {
+                path: PathBuf::from(path),
+            }),
+            EngineEvent::AudioDeviceChanged => self.emit_audio_devices(),
+            EngineEvent::MetaChanged => self.emit_meta(),
         }
     }
 
@@ -623,6 +798,12 @@ impl Actor {
             current.applied_output_settings = true;
             player.set_volume(self.volume);
             player.set_muted(self.muted);
+            if self.stereo_mode != StereoMode::Stereo {
+                player.set_stereo_mode(self.stereo_mode);
+            }
+            if self.audio_device.is_some() {
+                player.set_audio_device(self.audio_device.as_deref());
+            }
             if self.rate != 1.0 {
                 player.set_rate(self.rate);
             }
@@ -644,6 +825,8 @@ impl Actor {
                 });
             }
             self.tracks_dirty = true;
+            self.emit_meta();
+            self.emit_navigation();
         }
         if let Some(target) = self.current.as_mut().and_then(|c| c.pending_seek.take())
             && let Some(player) = &self.player

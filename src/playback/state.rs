@@ -68,15 +68,22 @@ pub struct TrackInfo {
 pub struct Tracks {
     pub audio: Vec<TrackInfo>,
     pub subtitles: Vec<TrackInfo>,
+    pub video: Vec<TrackInfo>,
     pub current_audio: Option<i32>,
     /// `None` or `Some(-1)` both mean subtitles are disabled.
     pub current_subtitle: Option<i32>,
+    pub current_video: Option<i32>,
 }
 
 impl Tracks {
     /// Subtitle tracks without LibVLC's synthetic "Disable" entry.
     pub fn real_subtitles(&self) -> impl Iterator<Item = &TrackInfo> {
         self.subtitles.iter().filter(|t| t.id >= 0)
+    }
+
+    /// Video tracks without LibVLC's synthetic "Disable" entry.
+    pub fn real_video(&self) -> impl Iterator<Item = &TrackInfo> {
+        self.video.iter().filter(|t| t.id >= 0)
     }
 
     /// Audio tracks without LibVLC's synthetic "Disable" entry.

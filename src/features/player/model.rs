@@ -1,5 +1,8 @@
 //! UI-facing playback snapshot, updated only from actor events (never by polling the engine).
 
+use std::path::PathBuf;
+
+use crate::playback::features::{AudioDevice, EqualizerInfo, MediaMeta, Navigation};
 use crate::playback::state::{PlaybackState, Tracks};
 use crate::playback::{Event, PlaybackError, RequestId};
 
@@ -43,6 +46,13 @@ pub struct PlayerModel {
     pub tracks: Tracks,
     pub audio_delay_ms: i64,
     pub subtitle_delay_ms: i64,
+    pub meta: MediaMeta,
+    pub navigation: Navigation,
+    /// Engine-wide (not per item).
+    pub equalizer_info: EqualizerInfo,
+    pub audio_devices: Vec<AudioDevice>,
+    pub audio_device: Option<String>,
+    pub last_snapshot: Option<PathBuf>,
     /// The most recent error to show (dismissable).
     pub error: Option<PlaybackError>,
     pub runtime: RuntimeStatus,
@@ -65,6 +75,12 @@ impl Default for PlayerModel {
             tracks: Tracks::default(),
             audio_delay_ms: 0,
             subtitle_delay_ms: 0,
+            meta: MediaMeta::default(),
+            navigation: Navigation::default(),
+            equalizer_info: EqualizerInfo::default(),
+            audio_devices: Vec::new(),
+            audio_device: None,
+            last_snapshot: None,
             error: None,
             runtime: RuntimeStatus::NotStarted,
         }
@@ -85,14 +101,41 @@ impl PlayerModel {
         self.tracks = Tracks::default();
         self.audio_delay_ms = 0;
         self.subtitle_delay_ms = 0;
+        self.meta = MediaMeta::default();
+        self.navigation = Navigation::default();
         self.error = None;
+    }
+
+    /// The best title to show: stream "now playing", tag title, then the file name.
+    pub fn display_title(&self) -> &str {
+        self.meta
+            .now_playing
+            .as_deref()
+            .or(self.meta.title.as_deref())
+            .unwrap_or(&self.title)
     }
 
     /// Forget the current item (queue cleared or current item removed while stopped).
     pub fn clear(&mut self) {
-        let keep = (self.volume, self.muted, self.rate, self.runtime.clone());
+        let keep = (
+            self.volume,
+            self.muted,
+            self.rate,
+            self.runtime.clone(),
+            std::mem::take(&mut self.equalizer_info),
+            std::mem::take(&mut self.audio_devices),
+            self.audio_device.take(),
+        );
         *self = Self::default();
-        (self.volume, self.muted, self.rate, self.runtime) = keep;
+        (
+            self.volume,
+            self.muted,
+            self.rate,
+            self.runtime,
+            self.equalizer_info,
+            self.audio_devices,
+            self.audio_device,
+        ) = keep;
     }
 
     /// Fraction of the media played, for the timeline.
@@ -190,6 +233,33 @@ impl PlayerModel {
             } if self.is_current(request) => {
                 self.audio_delay_ms = audio_ms;
                 self.subtitle_delay_ms = subtitle_ms;
+                Outcome::Changed
+            }
+            Event::MetaChanged { request, meta } if self.is_current(request) => {
+                if self.meta == meta {
+                    return Outcome::Unchanged;
+                }
+                self.meta = meta;
+                Outcome::Changed
+            }
+            Event::NavigationChanged {
+                request,
+                navigation,
+            } if self.is_current(request) => {
+                self.navigation = navigation;
+                Outcome::Changed
+            }
+            Event::EqualizerInfo(info) => {
+                self.equalizer_info = info;
+                Outcome::Changed
+            }
+            Event::AudioDevicesChanged { devices, current } => {
+                self.audio_devices = devices;
+                self.audio_device = current;
+                Outcome::Changed
+            }
+            Event::SnapshotSaved { path } => {
+                self.last_snapshot = Some(path);
                 Outcome::Changed
             }
             Event::EndReached { request } if self.is_current(request) => {
@@ -349,6 +419,31 @@ mod tests {
         assert_eq!(model.runtime, RuntimeStatus::NotStarted);
         assert_eq!(model.state, PlaybackState::Error);
         assert!(model.error.is_some());
+    }
+
+    #[test]
+    fn metadata_titles_and_stale_meta() {
+        let mut model = opened(2);
+        let meta = MediaMeta {
+            title: Some("Song".into()),
+            now_playing: Some("Live: Song".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            model.apply(Event::MetaChanged {
+                request: RequestId(1),
+                meta: meta.clone()
+            }),
+            Outcome::Unchanged
+        );
+        assert_eq!(model.display_title(), "a.mkv");
+        model.apply(Event::MetaChanged {
+            request: RequestId(2),
+            meta,
+        });
+        assert_eq!(model.display_title(), "Live: Song");
+        model.begin(RequestId(3), "b.mkv".into(), None);
+        assert_eq!(model.display_title(), "b.mkv");
     }
 
     #[test]
