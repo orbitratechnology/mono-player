@@ -1,0 +1,94 @@
+name: macOS app
+
+# Builds "Mono Player.app" for Apple silicon and Intel with the LibVLC runtime from the
+# official VLC release bundled inside, runs the LibVLC integration tests on macOS, launches the
+# app on a test video, and uploads zipped apps plus a screenshot as artifacts.
+on:
+  push:
+    branches: [main, claude/app-build-ztwwfh]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  VLC_VERSION: 3.0.21
+
+jobs:
+  app:
+    name: ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+          - arch: intel
+            target: x86_64-apple-darwin
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Fetch LibVLC from the official VLC release
+        run: |
+          curl -fsSL -o vlc.dmg "https://download.videolan.org/pub/videolan/vlc/${VLC_VERSION}/macosx/vlc-${VLC_VERSION}-universal.dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint /Volumes/VLC vlc.dmg
+          ditto /Volumes/VLC/VLC.app "$RUNNER_TEMP/VLC.app"
+          hdiutil detach /Volumes/VLC
+          echo "VLC_LIB=$RUNNER_TEMP/VLC.app/Contents/MacOS/lib" >> "$GITHUB_ENV"
+          ls -la "$RUNNER_TEMP/VLC.app/Contents/MacOS/lib"
+
+      - name: Link settings
+        run: |
+          # Link against VLC's libvlc; at run time look in the bundle's Frameworks folder
+          # (and, for tests on this runner only, in the VLC lib folder).
+          echo "RUSTFLAGS=-L $VLC_LIB -C link-arg=-Wl,-rpath,@executable_path/../Frameworks -C link-arg=-Wl,-rpath,$VLC_LIB" >> "$GITHUB_ENV"
+
+      - name: LibVLC integration tests
+        if: matrix.arch == 'arm64'
+        env:
+          VLC_PLUGIN_PATH: ${{ runner.temp }}/VLC.app/Contents/MacOS/plugins
+        run: cargo test --locked --target ${{ matrix.target }} --test playback_adapter
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          scripts/package-macos.sh "$RUNNER_TEMP/VLC.app" "target/${{ matrix.target }}/release/mono-player" dist
+          cd dist && ditto -c -k --keepParent "Mono Player.app" "Mono-Player-macOS-${{ matrix.arch }}.zip"
+
+      - name: Smoke test (launch on a 1080p video, screenshot)
+        if: matrix.arch == 'arm64'
+        run: |
+          brew install --quiet ffmpeg
+          ffmpeg -loglevel error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440 \
+            -t 20 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$RUNNER_TEMP/test video.mp4"
+          MONO_PLAYER_LOG=1 MONO_PLAYER_CONFIG_DIR="$RUNNER_TEMP/cfg" \
+            "dist/Mono Player.app/Contents/MacOS/mono-player" "$RUNNER_TEMP/test video.mp4" > smoke.log 2>&1 &
+          PID=$!
+          sleep 12
+          screencapture -x dist/smoke-playing.png || true
+          kill -TERM $PID || true
+          sleep 2
+          cat smoke.log
+          grep -q "LibVLC .* started" smoke.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mono-Player-macOS-${{ matrix.arch }}
+          path: dist/Mono-Player-macOS-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.arch == 'arm64'
+        with:
+          name: smoke-test-arm64
+          path: |
+            dist/smoke-playing.png
+            smoke.log
+          if-no-files-found: ignore
