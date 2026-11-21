@@ -39,14 +39,9 @@ jobs:
           hdiutil attach -nobrowse -readonly -mountpoint /Volumes/VLC vlc.dmg
           ditto /Volumes/VLC/VLC.app "$RUNNER_TEMP/VLC.app"
           hdiutil detach /Volumes/VLC
-          echo "VLC_LIB=$RUNNER_TEMP/VLC.app/Contents/MacOS/lib" >> "$GITHUB_ENV"
+          # build.rs links against this folder (the same mechanism a local Mac build uses).
+          echo "VLC_LIB_DIR=$RUNNER_TEMP/VLC.app/Contents/MacOS/lib" >> "$GITHUB_ENV"
           ls -la "$RUNNER_TEMP/VLC.app/Contents/MacOS/lib"
-
-      - name: Link settings
-        run: |
-          # Link against VLC's libvlc; at run time look in the bundle's Frameworks folder
-          # (and, for tests on this runner only, in the VLC lib folder).
-          echo "RUSTFLAGS=-L $VLC_LIB -C link-arg=-Wl,-rpath,@executable_path/../Frameworks -C link-arg=-Wl,-rpath,$VLC_LIB" >> "$GITHUB_ENV"
 
       - name: LibVLC integration tests
         if: matrix.arch == 'arm64'

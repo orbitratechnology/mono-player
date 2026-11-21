@@ -53,8 +53,25 @@ sudo apt install libvlc-dev vlc-plugin-base \
 cargo run --release -- path/to/video.mkv path/to/video.srt
 ```
 
-On Windows and macOS, point the linker at the LibVLC SDK from the official VLC distribution
-(`libvlc.lib` / `libvlc.dylib`) and ship its `plugins` folder; see
+### macOS
+
+LibVLC comes from VLC itself. With [VLC](https://www.videolan.org/vlc/) installed in
+`/Applications`, `cargo run --release -- video.mp4` works directly: `build.rs` finds
+`VLC.app` and links against its `libvlc.dylib`. Otherwise set `VLC_LIB_DIR` to the folder
+containing `libvlc.dylib`.
+
+To build a self-contained `Mono Player.app` (LibVLC and plugins copied inside; downloads VLC
+first if it isn't installed):
+
+```sh
+scripts/build-macos-app.sh
+open "dist/Mono Player.app"
+```
+
+### Windows
+
+Set `VLC_LIB_DIR` to the VLC SDK's `sdk/lib` folder (containing `libvlc.lib`) and ship
+`libvlc.dll`, `libvlccore.dll` and `plugins\` beside the executable; see
 [docs/PACKAGING.md](docs/PACKAGING.md).
 
 Debug builds compile all dependencies with `opt-level = 2` (GPUI Kit's guidance) so the UI is
